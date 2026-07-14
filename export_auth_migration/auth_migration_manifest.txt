@@ -1,0 +1,26 @@
+﻿MESA DE AYUDA 2.0 - MIGRACIÓN DE AUTENTICACIÓN
+Fecha: 2026-07-14 15:02:20
+Proyecto: C:\xampp\htdocs\Proyectos\Mesa_Ayuda_2.0
+Total de archivos: 19
+
+ARCHIVOS ENCONTRADOS
+====================
+backend\app\api\archivos_bitacora.py (1522 bytes)
+backend\app\api\auth.py (3289 bytes)
+backend\app\api\bitacoras.py (1940 bytes)
+backend\app\core\config.py (475 bytes)
+backend\app\core\security.py (2965 bytes)
+backend\app\main.py (1272 bytes)
+backend\app\schemas\auth.py (465 bytes)
+backend\app\services\auth_service.py (1773 bytes)
+backend\requirements.txt (107 bytes)
+frontend\package.json (714 bytes)
+frontend\postcss.config.js (66 bytes)
+frontend\src\api\http.ts (692 bytes)
+frontend\src\main.tsx (163 bytes)
+frontend\src\modules\auth\pages\LoginPage.tsx (7347 bytes)
+frontend\src\routes\ProtectedRoute.tsx (697 bytes)
+frontend\src\services\auth.service.ts (956 bytes)
+frontend\tailwind.config.js (2144 bytes)
+frontend\tsconfig.json (435 bytes)
+frontend\vite.config.ts (165 bytes)

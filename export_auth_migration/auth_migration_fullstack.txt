@@ -1,0 +1,989 @@
+﻿MESA DE AYUDA 2.0 - ARCHIVOS DE AUTENTICACIÓN FULLSTACK
+
+Los valores sensibles literales fueron reemplazados por:
+***REDACTED***
+
+
+====================================================================================================
+ARCHIVO: backend\app\api\archivos_bitacora.py
+====================================================================================================
+
+from typing import Annotated, List
+
+from fastapi import APIRouter, Depends, File, UploadFile
+from sqlalchemy.orm import Session
+
+from app.core.security import get_current_user
+from app.db.database import get_db
+from app.models.user import User
+from app.schemas.archivo_bitacora import ArchivoOut
+from app.services.archivo_service import (
+    guardar_archivos_bitacora,
+    listar_archivos_bitacora,
+    eliminar_archivo_bitacora,
+)
+
+router = APIRouter()
+
+
+@router.post("/{bitacora_id}/archivos", response_model=List[ArchivoOut])
+async def subir_archivos(
+    bitacora_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    files: List[UploadFile] = File(...),
+):
+    return await guardar_archivos_bitacora(db, bitacora_id, current_user.id, files)
+
+
+@router.get("/{bitacora_id}/archivos", response_model=List[ArchivoOut])
+def listar_archivos(
+    bitacora_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    return listar_archivos_bitacora(db, bitacora_id, current_user.id)
+
+
+@router.delete("/{bitacora_id}/archivos/{archivo_id}")
+def eliminar_archivo(
+    bitacora_id: int,
+    archivo_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    archivo = eliminar_archivo_bitacora(db, bitacora_id, archivo_id, current_user.id)
+    return {"ok": True, "archivo_id": archivo.id}
+
+
+====================================================================================================
+ARCHIVO: backend\app\api\auth.py
+====================================================================================================
+
+from __future__ import annotations
+
+from typing import Annotated
+from urllib.parse import parse_qs
+import json
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.core.security import create_access_token, get_current_user
+from app.db.database import get_db
+from app.models.user import User
+from app.schemas.auth import RegisterIn, Token
+from app.schemas.user import UserOut
+from app.services.auth_service import register_user, authenticate_user
+
+router = APIRouter()
+logger = logging.getLogger("uvicorn.error")
+
+
+@router.post("/register", response_model=UserOut, status_code=201)
+def register(
+    payload: RegisterIn,
+    db: Annotated[Session, Depends(get_db)],
+):
+    return register_user(db, payload)
+
+
+@router.post("/login", response_model=Token)
+async def login(
+    request: Request,
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+):
+    ct = request.headers.get("content-type", "")
+    raw = await request.body()
+    logger.info("LOGIN CT=%s LEN=%s RAW_PREVIEW=%s", ct, len(raw), raw[:200])
+
+    data: dict = {}
+
+    if "multipart/form-data" in ct:
+        try:
+            form = await request.form()
+            data = dict(form)
+        except Exception as e:
+            logger.warning("Error parseando multipart: %s", e)
+
+    elif "application/x-www-form-urlencoded" in ct:
+        try:
+            qs = parse_qs(raw.decode("utf-8", errors="ignore"))
+            data = {k: (v[0] if isinstance(v, list) and v else "") for k, v in qs.items()}
+        except Exception as e:
+            logger.warning("Error parseando urlencoded: %s", e)
+
+    elif "application/json" in ct or (raw and raw.strip().startswith(b"{")):
+        try:
+            data = json.loads(raw.decode("utf-8", errors="ignore"))
+            if not isinstance(data, dict):
+                data = {}
+        except Exception as e:
+            logger.warning("Error parseando JSON: %s", e)
+
+    if not data and raw:
+        try:
+            maybe = raw.decode("utf-8", errors="ignore").strip()
+            if maybe.startswith("{") and maybe.endswith("}"):
+                data = json.loads(maybe)
+        except Exception:
+            pass
+
+    identifier = (data.get("username") or data.get("email") or "").strip()
+    password = data.get("password") or ""
+
+    if not identifier or not password:
+        raise HTTPException(status_code=422, detail="username/email y password son requeridos")
+
+    user = authenticate_user(db, identifier, password)
+    token = create_access_token(sub=str(user.id))
+
+    response.set_cookie(
+        key=settings.COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
+        max_age=settings.ACCESS_TTL_MIN * 60,
+        path="/",
+    )
+
+    return Token(access_token=token)
+
+
+@router.get("/me", response_model=UserOut)
+def me(current_user: Annotated[User, Depends(get_current_user)]):
+    return current_user
+
+
+@router.post("/logout")
+def logout(response: Response):
+    response.delete_cookie(settings.COOKIE_NAME, path="/")
+    return {"ok": True}
+
+
+====================================================================================================
+ARCHIVO: backend\app\api\bitacoras.py
+====================================================================================================
+
+from typing import Annotated, List
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from app.core.security import get_current_user
+from app.db.database import get_db
+from app.models.user import User
+from app.schemas.bitacora import BitacoraCreate, BitacoraOut, BitacoraUpdate
+from app.services.bitacora_service import (
+    crear_bitacora,
+    listar_bitacoras_usuario,
+    obtener_bitacora_usuario,
+    actualizar_bitacora_usuario,
+    eliminar_bitacora_usuario,
+)
+
+router = APIRouter()
+
+
+@router.post("", response_model=BitacoraOut, status_code=201)
+def crear(
+    payload: BitacoraCreate,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    return crear_bitacora(db, payload, current_user)
+
+
+@router.get("", response_model=List[BitacoraOut])
+def listar(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    return listar_bitacoras_usuario(db, current_user.id)
+
+
+@router.get("/{bitacora_id}", response_model=BitacoraOut)
+def obtener(
+    bitacora_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    return obtener_bitacora_usuario(db, bitacora_id, current_user.id)
+
+
+@router.patch("/{bitacora_id}", response_model=BitacoraOut)
+def actualizar(
+    bitacora_id: int,
+    payload: BitacoraUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    return actualizar_bitacora_usuario(db, bitacora_id, current_user.id, payload)
+
+
+@router.delete("/{bitacora_id}")
+def eliminar(
+    bitacora_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    eliminar_bitacora_usuario(db, bitacora_id, current_user.id)
+    return {"ok": True}
+
+
+====================================================================================================
+ARCHIVO: backend\app\core\config.py
+====================================================================================================
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    APP_VERSION: str = "0.1.0-dev"
+    DATABASE_URL: str = "sqlite:///./dev.db"
+    JWT_SECRET: str = "dev-secret-change-me"
+    ACCESS_TTL_MIN: int = 15
+
+    COOKIE_NAME: str = "access_token"
+    COOKIE_SECURE: bool = False
+    COOKIE_SAMESITE: str = "lax"
+
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+
+settings = Settings()
+
+
+====================================================================================================
+ARCHIVO: backend\app\core\security.py
+====================================================================================================
+
+from __future__ import annotations
+
+from datetime import datetime, timezone, timedelta
+from typing import Annotated
+import base64
+import hashlib
+import hmac
+import json
+
+from fastapi import Depends, HTTPException, Request
+from passlib.context import CryptContext
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.db.database import get_db
+from app.models.user import User
+from app.schemas.auth import TokenPayload
+
+
+class JWTError(Exception):
+    pass
+
+
+def _b64e(b: bytes) -> str:
+    return base64.urlsafe_b64encode(b).rstrip(b"=").decode("ascii")
+
+
+def _b64d(s: str) -> bytes:
+    return base64.urlsafe_b64decode((s + "=" * (-len(s) % 4)).encode("ascii"))
+
+
+def jwt_encode(payload: dict, secret: str) -> str:
+    header = _b64e(json.dumps({"alg": "HS256", "typ": "JWT"}).encode())
+    body = _b64e(json.dumps(payload).encode())
+    sig = _b64e(
+        hmac.new(secret.encode(), f"{header}.{body}".encode(), hashlib.sha256).digest()
+    )
+    return f"{header}.{body}.{sig}"
+
+
+def jwt_decode(token: str, secret: str) -> dict:
+    try:
+        h, p, s = token.split(".")
+    except ValueError as e:
+        raise JWTError("Token malformado") from e
+
+    expected = hmac.new(secret.encode(), f"{h}.{p}".encode(), hashlib.sha256).digest()
+    if not hmac.compare_digest(expected, _b64d(s)):
+        raise JWTError("Firma invÃ¡lida")
+
+    data = json.loads(_b64d(p))
+
+    if "exp" in data:
+        now_ts = int(datetime.now(timezone.utc).timestamp())
+        if now_ts >= int(data["exp"]):
+            raise JWTError("Expirado")
+
+    return data
+
+
+pwd_ctx = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
+
+
+def hash_password(password: str) -> str:
+    return pwd_ctx.hash(password)
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    return pwd_ctx.verify(password, password_hash)
+
+
+def create_access_token(sub: str) -> str:
+    exp = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TTL_MIN)
+    return jwt_encode({"sub": sub, "exp": int(exp.timestamp())}, settings.JWT_SECRET)
+
+
+def token_from(request: Request) -> str:
+    cookie_token = request.cookies.get(settings.COOKIE_NAME)
+    if cookie_token:
+        return cookie_token
+
+    auth = request.headers.get("Authorization")
+    if auth and auth.lower().startswith("bearer "):
+        return auth.split(" ", 1)[1]
+
+    raise HTTPException(status_code=401, detail="No autenticado")
+
+
+def get_current_user(
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> User:
+    try:
+        data = TokenPayload(**jwt_decode(token_from(request), settings.JWT_SECRET))
+    except Exception:
+        raise HTTPException(status_code=401, detail="No autenticado")
+
+    user = db.get(User, int(data.sub))
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="No autenticado")
+
+    return user
+
+
+====================================================================================================
+ARCHIVO: backend\app\main.py
+====================================================================================================
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.core.config import settings
+from app.db.database import Base, engine
+import app.models  # importante para registrar modelos
+from app.api.auth import router as auth_router
+from app.api.bitacoras import router as bitacoras_router
+from app.api.archivos_bitacora import router as archivos_router
+from app.api.catalogos import router as catalogos_router
+
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI(title="Mesa de Ayuda API (dev)", version=settings.APP_VERSION)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+        "http://localhost:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
+@app.get("/version")
+async def version():
+    return {"version": settings.APP_VERSION}
+
+
+app.include_router(auth_router, prefix="/auth", tags=["Auth"])
+app.include_router(bitacoras_router, prefix="/bitacoras", tags=["BitÃ¡coras"])
+app.include_router(archivos_router, prefix="/bitacoras", tags=["Archivos de BitÃ¡cora"])
+app.include_router(catalogos_router, prefix="/catalogos", tags=["CatÃ¡logos"])
+
+
+====================================================================================================
+ARCHIVO: backend\app\schemas\auth.py
+====================================================================================================
+
+from pydantic import BaseModel, EmailStr, Field
+
+
+class RegisterIn(BaseModel):
+    email: EmailStr
+    username: str = Field(min_length=3, max_length=80)
+    password: str = Field(min_length=8)
+
+
+class LoginIn(BaseModel):
+    username: str | None = None
+    email: EmailStr | None = None
+    password: str
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class TokenPayload(BaseModel):
+    sub: str
+    exp: int
+
+
+====================================================================================================
+ARCHIVO: backend\app\services\auth_service.py
+====================================================================================================
+
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+from fastapi import HTTPException
+
+from app.core.security import hash_password, verify_password
+from app.models.user import User
+
+
+def register_user(db: Session, payload):
+    if db.scalar(select(User).where(User.email == payload.email)):
+        raise HTTPException(status_code=409, detail="Email ya registrado")
+
+    if db.scalar(select(User).where(User.username == payload.username)):
+        raise HTTPException(status_code=409, detail="Usuario ya registrado")
+
+    user = User(
+        email=payload.email,
+        username=payload.username,
+        password_hash=hash_password(payload.password),
+    )
+
+    db.add(user)
+    try:
+        db.commit()
+        db.refresh(user)
+    except IntegrityError as e:
+        db.rollback()
+        msg = str(e.orig) if hasattr(e, "orig") else str(e)
+
+        if "users.email" in msg or "UNIQUE constraint failed: users.email" in msg:
+            raise HTTPException(status_code=409, detail="Email ya registrado")
+        if "users.username" in msg or "UNIQUE constraint failed: users.username" in msg:
+            raise HTTPException(status_code=409, detail="Usuario ya registrado")
+
+        raise HTTPException(status_code=400, detail="Datos invÃ¡lidos") from e
+
+    return user
+
+
+def authenticate_user(db: Session, identifier: str, password: str):
+    user = db.scalar(select(User).where(User.username == identifier))
+    if not user:
+        user = db.scalar(select(User).where(User.email == identifier))
+
+    if not user or not verify_password(password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Credenciales invÃ¡lidas")
+
+    return user
+
+
+====================================================================================================
+ARCHIVO: backend\requirements.txt
+====================================================================================================
+
+fastapi
+uvicorn[standard]
+sqlalchemy>=2.0
+passlib[bcrypt]>=1.7
+pydantic-settings>=2.4
+email-validator>=2.1
+
+
+
+====================================================================================================
+ARCHIVO: frontend\package.json
+====================================================================================================
+
+{
+  "name": "mesa-ayuda-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "doctor": "npx react-doctor@latest"
+  },
+  "dependencies": {
+    "axios": "^1.13.2",
+    "lucide-react": "^0.453.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.9.6"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.26",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
+    "baseline-browser-mapping": "^2.10.43",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.10",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.3"
+  }
+}
+
+
+
+====================================================================================================
+ARCHIVO: frontend\postcss.config.js
+====================================================================================================
+
+export default { plugins: { tailwindcss: {}, autoprefixer: {} } }
+
+
+
+====================================================================================================
+ARCHIVO: frontend\src\api\http.ts
+====================================================================================================
+
+import axios from "axios";
+import { API_URL } from "../app/env";
+
+const http = axios.create({
+  baseURL: API_URL,
+  withCredentials: true,
+});
+
+http.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+http.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    const currentPath = window.location.pathname;
+
+    if (status === 401 && currentPath !== "/login") {
+      window.location.replace("/login");
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+export default http;
+
+
+====================================================================================================
+ARCHIVO: frontend\src\main.tsx
+====================================================================================================
+
+import ReactDOM from "react-dom/client";
+import App from "./App";
+import "./index.css";
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <App />
+);
+
+
+====================================================================================================
+ARCHIVO: frontend\src\modules\auth\pages\LoginPage.tsx
+====================================================================================================
+
+import React, { useEffect, useState } from "react";
+import { Mail, Lock, Eye, EyeOff, ExternalLink, Sparkles } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { BG_URL } from "../../../app/env";
+import { login, me } from "../../../services/auth.service";
+
+export default function LoginPage() {
+  const nav = useNavigate();
+  const [showPwd, setShowPwd] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const main = document.querySelector("#login-section");
+    if (main) main.classList.add("animate-fade-zoom");
+  }, []);
+
+  useEffect(() => {
+    me()
+      .then(() => nav("/app", { replace: true }))
+      .catch(() => {});
+  }, [nav]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const username = (document.getElementById("email") as HTMLInputElement).value;
+      const password = (document.getElementById("password") as HTMLInputElement).value;
+
+      await login({
+        username: username.trim(),
+        password,
+      });
+
+      await me();
+
+      nav("/app", { replace: true });
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.detail ||
+          err?.message ||
+          "Error al iniciar sesiÃ³n"
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="relative min-h-screen w-full overflow-hidden">
+      <div
+        className="absolute inset-0 bg-center bg-no-repeat"
+        style={{ backgroundImage: `url(${BG_URL})`, backgroundSize: "cover" }}
+      />
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-[6px]" />
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/25 to-black/50" />
+
+      <main className="relative z-10 mx-auto flex min-h-screen max-w-7xl items-center justify-center px-4 py-16">
+        <section
+          id="login-section"
+          className="w-full max-w-md scale-95 rounded-3xl border border-white/40 bg-white/25 p-8 opacity-0 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-2xl"
+        >
+          <div className="mb-6 flex items-center gap-3 text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]">
+            <div className="grid h-11 w-11 place-content-center rounded-2xl bg-black/30 ring-1 ring-white/30 animate-fade-in">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div className="animate-fade-in-delay">
+              <h1 className="text-xl font-semibold leading-tight">Mesa de Ayuda</h1>
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white/80 p-6 shadow-xl ring-1 ring-white/50 animate-fade-up">
+            <h2 className="mb-1 text-2xl font-semibold tracking-tight text-neutral-800">
+              Bienvenido ðŸ‘‹
+            </h2>
+            <p className="mb-6 text-sm text-neutral-600">
+              Accede para gestionar solicitudes y dar seguimiento.
+            </p>
+
+            <form className="space-y-4" onSubmit={handleSubmit}>
+              <label className="block text-sm font-medium text-neutral-700" htmlFor="email">
+                Usuario o correo
+              </label>
+
+              <div className="relative">
+                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+                <input
+                  id="email"
+                  type="text"
+                  placeholder="usuario@dominio"
+                  className="w-full rounded-xl border border-neutral-200 bg-white px-10 py-3 text-[15px] text-neutral-800 outline-none placeholder:text-neutral-400 focus:border-fuchsia-400 focus:ring-2 focus:ring-fuchsia-100"
+                  autoComplete="username"
+                />
+              </div>
+
+              <label
+                className="mt-3 block text-sm font-medium text-neutral-700"
+                htmlFor="password"
+              >
+                ContraseÃ±a
+              </label>
+
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+                <input
+                  id="password"
+                  type={showPwd ? "text" : "password"}
+                  placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                  className="w-full rounded-xl border border-neutral-200 bg-white px-10 py-3 text-[15px] text-neutral-800 outline-none placeholder:text-neutral-400 focus:border-fuchsia-400 focus:ring-2 focus:ring-fuchsia-100"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPwd((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-neutral-500 hover:bg-slate-100"
+                  aria-label={showPwd ? "Ocultar contraseÃ±a" : "Mostrar contraseÃ±a"}
+                >
+                  {showPwd ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+
+              <div className="mt-1 flex items-center justify-between text-sm animate-fade-in-delay">
+                <a className="text-fuchsia-600 hover:underline" href="#recuperar">
+                  Â¿Olvidaste tu contraseÃ±a?
+                </a>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className={`mt-4 w-full rounded-xl bg-gradient-to-r from-fuchsia-500 to-violet-500 px-4 py-3 text-center text-[15px] font-semibold text-white shadow-lg transition-transform focus:outline-none focus:ring-2 focus:ring-fuchsia-200 animate-fade-up-delay ${
+                  isSubmitting ? "cursor-not-allowed opacity-70" : "hover:scale-[1.02]"
+                }`}
+              >
+                {isSubmitting ? "Ingresando..." : "Iniciar sesiÃ³n"}
+              </button>
+
+              <div className="relative py-3 animate-fade-in-delay">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-neutral-200" />
+                </div>
+                <div className="relative mx-auto w-fit bg-white px-2 text-xs text-neutral-500">
+                  o
+                </div>
+              </div>
+
+              <a
+                href="#"
+                className="group inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-[15px] font-medium text-neutral-700 transition hover:bg-slate-50 animate-fade-up-delay"
+              >
+                Ir al Repositorio de Formatos
+                <ExternalLink className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              </a>
+
+              {error && (
+                <p className="mt-2 text-sm text-red-600 animate-fade-in">{error}</p>
+              )}
+            </form>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+
+====================================================================================================
+ARCHIVO: frontend\src\routes\ProtectedRoute.tsx
+====================================================================================================
+
+import { useEffect, useState } from "react";
+import { Navigate, Outlet } from "react-router-dom";
+import { checkSession } from "../services/auth.service";
+import SplashScreen from "../layouts/SplashScreen";
+
+export default function ProtectedRoute() {
+  const [ok, setOk] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+
+    checkSession()
+      .then((v) => {
+        if (alive) setOk(v);
+      })
+      .catch(() => {
+        if (alive) setOk(false);
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (ok === null) return <SplashScreen />;
+  if (!ok) return <Navigate to="/login" replace />;
+
+  return <Outlet />;
+}
+
+
+====================================================================================================
+ARCHIVO: frontend\src\services\auth.service.ts
+====================================================================================================
+
+import http from "../api/http";
+import { LOGOUT_PATH } from "../app/env";
+
+export type LoginPayload = {
+  username: string;
+  password: string;
+};
+
+export type MeResponse = {
+  id: number;
+  email: string;
+  username: string;
+};
+
+export async function login(payload: LoginPayload) {
+  const { data } = await http.post("/auth/login", payload);
+
+  const token =
+    data?.access_token || data?.token || data?.accessToken || null;
+
+  if (token) {
+    localStorage.setItem("token", token);
+  }
+
+  return data;
+}
+
+export async function me() {
+  const { data } = await http.get<MeResponse>("/auth/me");
+  return data;
+}
+
+export async function checkSession() {
+  try {
+    await me();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function logout() {
+  try {
+    await http.post(LOGOUT_PATH);
+  } catch {
+    // no-op
+  } finally {
+    localStorage.removeItem("token");
+  }
+
+  return true;
+}
+
+
+====================================================================================================
+ARCHIVO: frontend\tailwind.config.js
+====================================================================================================
+
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}", // Incluye JS y JSX por compatibilidad futura
+  ],
+  theme: {
+    extend: {
+      colors: {
+        primary: {
+          DEFAULT: "#7e22ce", // Morado principal DIF moderno
+          light: "#a855f7",
+          dark: "#581c87",
+        },
+        accent: "#9333ea",
+        background: "#f9fafb",
+      },
+
+      // =========================
+      // Animaciones personalizadas
+      // =========================
+      animation: {
+        "fade-zoom": "fadeInZoom 0.8s ease-out forwards",
+        "fade-in": "fadeIn 1s ease-out forwards",
+        "fade-in-delay": "fadeIn 1s ease-out 0.3s forwards",
+        "fade-up": "fadeUp 0.8s ease-out forwards",
+        "fade-up-delay": "fadeUp 0.8s ease-out 0.4s forwards",
+        "slide-left": "slideLeft 0.7s ease-out forwards",
+        "slide-right": "slideRight 0.7s ease-out forwards",
+      },
+
+      keyframes: {
+        fadeInZoom: {
+          "0%": { opacity: 0, transform: "scale(0.95)" },
+          "100%": { opacity: 1, transform: "scale(1)" },
+        },
+        fadeIn: {
+          "0%": { opacity: 0 },
+          "100%": { opacity: 1 },
+        },
+        fadeUp: {
+          "0%": { opacity: 0, transform: "translateY(15px)" },
+          "100%": { opacity: 1, transform: "translateY(0)" },
+        },
+        slideLeft: {
+          "0%": { opacity: 0, transform: "translateX(40px)" },
+          "100%": { opacity: 1, transform: "translateX(0)" },
+        },
+        slideRight: {
+          "0%": { opacity: 0, transform: "translateX(-40px)" },
+          "100%": { opacity: 1, transform: "translateX(0)" },
+        },
+      },
+
+      // =========================
+      // Sombras, bordes y tipografÃ­a
+      // =========================
+      boxShadow: {
+        soft: "0 8px 24px rgba(0, 0, 0, 0.08)",
+        glow: "0 0 15px rgba(126, 34, 206, 0.4)",
+      },
+      borderRadius: {
+        "2xl": "1rem",
+        "3xl": "1.5rem",
+      },
+      fontFamily: {
+        sans: ['"Noto Sans"', "system-ui", "sans-serif"],
+      },
+    },
+  },
+  plugins: [],
+};
+
+
+====================================================================================================
+ARCHIVO: frontend\tsconfig.json
+====================================================================================================
+
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "types": ["vite/client"]
+  },
+  "include": ["src"]
+}
+
+
+====================================================================================================
+ARCHIVO: frontend\vite.config.ts
+====================================================================================================
+
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+export default defineConfig({ plugins:[react()], server:{host:'127.0.0.1',port:5173} })
+
+
