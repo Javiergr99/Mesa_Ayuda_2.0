@@ -1,11 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { CalendarDays, Filter, Search } from "lucide-react";
+
 import {
   ESTADOS_MX,
   ESTATUS_SOL,
   TIPOS_REGISTRO,
   TIPOS_SOL,
 } from "../constants/solicitudes.constants";
+
 import type {
   EstatusSolicitud,
   TipoRegistroSolicitud,
@@ -21,13 +30,20 @@ type Props = {
   tipo: string;
   onTipoChange: (value: string) => void;
   tipoRegistro: TipoRegistroSolicitud | "";
-  onTipoRegistroChange: (value: TipoRegistroSolicitud | "") => void;
+  onTipoRegistroChange: (
+    value: TipoRegistroSolicitud | "",
+  ) => void;
   desde: string;
   onDesdeChange: (value: string) => void;
   hasta: string;
   onHastaChange: (value: string) => void;
   onClear: () => void;
   onApply: () => void;
+};
+
+type CalendarCell = {
+  key: string;
+  day: number | null;
 };
 
 const MONTHS = [
@@ -45,7 +61,65 @@ const MONTHS = [
   "diciembre",
 ] as const;
 
-const WEEK_DAYS = ["lu", "ma", "mi", "ju", "vi", "sá", "do"] as const;
+const WEEK_DAYS = [
+  "lu",
+  "ma",
+  "mi",
+  "ju",
+  "vi",
+  "sá",
+  "do",
+] as const;
+
+const ESTADO_OPTIONS = ["", ...ESTADOS_MX];
+const ESTATUS_OPTIONS = ["", ...ESTATUS_SOL];
+const TIPO_OPTIONS = ["", ...TIPOS_SOL];
+const TIPO_REGISTRO_OPTIONS = ["", ...TIPOS_REGISTRO];
+
+function formatDisplayDate(value: string) {
+  if (!value) {
+    return "";
+  }
+
+  const [year, month, day] = value.split("-");
+
+  if (!year || !month || !day) {
+    return "";
+  }
+
+  return `${day}/${month}/${year}`;
+}
+
+function createCalendarCells(
+  year: number,
+  month: number,
+): CalendarCell[] {
+  const daysInMonth = new Date(
+    year,
+    month + 1,
+    0,
+  ).getDate();
+
+  const firstDay =
+    (new Date(year, month, 1).getDay() + 6) % 7;
+
+  const numberOfCells =
+    Math.ceil((firstDay + daysInMonth) / 7) * 7;
+
+  return Array.from({ length: numberOfCells }, (_, slot) => {
+    const day = slot - firstDay + 1;
+    const validDay =
+      day >= 1 && day <= daysInMonth ? day : null;
+
+    return {
+      key:
+        validDay === null
+          ? `empty-${year}-${month}-${slot}`
+          : `${year}-${String(month + 1).padStart(2, "0")}-${String(validDay).padStart(2, "0")}`,
+      day: validDay,
+    };
+  });
+}
 
 export default function SolicitudFilters({
   q,
@@ -65,29 +139,40 @@ export default function SolicitudFilters({
   onClear,
   onApply,
 }: Props) {
-  const estadoOptions = useMemo(() => ["", ...ESTADOS_MX], []);
-  const estatusOptions = useMemo(() => ["", ...ESTATUS_SOL], []);
-  const tipoOptions = useMemo(() => ["", ...TIPOS_SOL], []);
-  const tipoRegistroOptions = useMemo(() => ["", ...TIPOS_REGISTRO], []);
+  const searchInputId = useId();
 
   return (
-    <section className="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <section
+      aria-label="Filtros de solicitudes"
+      className="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+    >
       <div className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
-        <Filter className="h-4 w-4" />
+        <Filter aria-hidden="true" className="h-4 w-4" />
         <span>Filtros</span>
       </div>
 
       <div className="grid grid-cols-12 gap-3">
         <div className="col-span-12 md:col-span-4">
-          <label className="mb-1 block text-[13px] text-slate-600">
+          <label
+            htmlFor={searchInputId}
+            className="mb-1 block text-[13px] text-slate-600"
+          >
             Búsqueda
           </label>
 
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+            />
+
             <input
+              id={searchInputId}
+              type="search"
               value={q}
-              onChange={(e) => onQChange(e.target.value)}
+              onChange={(event) =>
+                onQChange(event.target.value)
+              }
               placeholder="Folio, nombre, estado, tipo, registro, estatus…"
               className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-[14px] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
             />
@@ -98,15 +183,17 @@ export default function SolicitudFilters({
           label="Estado"
           value={estado}
           onChange={onEstadoChange}
-          options={estadoOptions}
+          options={ESTADO_OPTIONS}
           className="col-span-12 md:col-span-3"
         />
 
         <FilterSelect
           label="Estatus de la solicitud"
           value={estatus}
-          onChange={(value) => onEstatusChange(value as EstatusSolicitud | "")}
-          options={estatusOptions}
+          onChange={(value) =>
+            onEstatusChange(value as EstatusSolicitud | "")
+          }
+          options={ESTATUS_OPTIONS}
           className="col-span-6 md:col-span-2"
         />
 
@@ -114,7 +201,7 @@ export default function SolicitudFilters({
           label="Tipo de solicitud"
           value={tipo}
           onChange={onTipoChange}
-          options={tipoOptions}
+          options={TIPO_OPTIONS}
           className="col-span-6 md:col-span-3"
         />
 
@@ -122,9 +209,11 @@ export default function SolicitudFilters({
           label="Tipo de registro"
           value={tipoRegistro}
           onChange={(value) =>
-            onTipoRegistroChange(value as TipoRegistroSolicitud | "")
+            onTipoRegistroChange(
+              value as TipoRegistroSolicitud | "",
+            )
           }
-          options={tipoRegistroOptions}
+          options={TIPO_REGISTRO_OPTIONS}
           className="col-span-12 md:col-span-3"
         />
 
@@ -181,46 +270,70 @@ function FilterSelect({
   className = "",
   disabled = false,
 }: FilterSelectProps) {
+  const triggerId = useId();
+  const listboxId = useId();
+
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  const filteredOptions = useMemo(
-    () =>
-      options.filter((option) =>
-        option.toLowerCase().includes(query.toLowerCase())
-      ),
-    [options, query]
-  );
+  const filteredOptions = useMemo(() => {
+    const normalizedQuery = query.toLowerCase();
+
+    return options.filter((option) =>
+      option.toLowerCase().includes(normalizedQuery),
+    );
+  }, [options, query]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
 
-    function handleClickOutside(e: MouseEvent) {
-      if (!containerRef.current) return;
-      if (!containerRef.current.contains(e.target as Node)) {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
         setOpen(false);
         setQuery("");
       }
     }
 
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        handleClickOutside,
+      );
+    };
   }, [open]);
 
   return (
     <div className={className} ref={containerRef}>
       {label !== undefined && (
-        <label className="mb-1 block text-[13px] text-slate-600">
+        <label
+          htmlFor={triggerId}
+          className="mb-1 block text-[13px] text-slate-600"
+        >
           {label || "Todos"}
         </label>
       )}
 
       <div className="relative">
         <button
+          id={triggerId}
           type="button"
           disabled={disabled}
-          onClick={() => !disabled && setOpen((prev) => !prev)}
+          aria-controls={listboxId}
+          aria-expanded={open}
+          aria-haspopup="listbox"
+          onClick={() => {
+            if (!disabled) {
+              setOpen((current) => !current);
+            }
+          }}
           className={`w-full rounded-lg border px-3 py-2 text-left text-[14px] shadow-sm focus:outline-none focus:ring-2 ${
             disabled
               ? "border-slate-200 bg-slate-50 text-slate-500"
@@ -230,6 +343,7 @@ function FilterSelect({
           {value || "Todos"}
 
           <span
+            aria-hidden="true"
             className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-transform duration-150 ${
               open ? "rotate-180" : "rotate-0"
             }`}
@@ -239,13 +353,22 @@ function FilterSelect({
         </button>
 
         {open && (
-          <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white p-2 shadow-2xl">
+          <div
+            id={listboxId}
+            role="listbox"
+            aria-label={`Opciones de ${label || "filtro"}`}
+            className="absolute z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white p-2 shadow-2xl"
+          >
             <input
               autoFocus
+              type="search"
+              aria-label={`Buscar en ${label || "opciones"}`}
               placeholder="Buscar…"
               className="mb-2 w-full rounded-md border border-slate-200 px-2 py-1 text-[13px] focus:outline-none focus:ring-2 focus:ring-slate-200"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(event) =>
+                setQuery(event.target.value)
+              }
             />
 
             <div className="max-h-56 overflow-auto">
@@ -253,8 +376,12 @@ function FilterSelect({
                 <button
                   key={option || "__all"}
                   type="button"
+                  role="option"
+                  aria-selected={option === value}
                   className="block w-full rounded-md px-3 py-2 text-left text-[14px] hover:bg-slate-50"
-                  onMouseDown={(e) => e.preventDefault()}
+                  onMouseDown={(event) =>
+                    event.preventDefault()
+                  }
                   onClick={() => {
                     onChange(option);
                     setOpen(false);
@@ -266,7 +393,10 @@ function FilterSelect({
               ))}
 
               {filteredOptions.length === 0 && (
-                <div className="px-3 py-6 text-center text-[13px] text-slate-500">
+                <div
+                  role="status"
+                  className="px-3 py-6 text-center text-[13px] text-slate-500"
+                >
                   Sin resultados
                 </div>
               )}
@@ -293,13 +423,23 @@ function FilterDateField({
   className = "",
   disabled = false,
 }: FilterDateFieldProps) {
+  const inputId = useId();
+  const panelId = useId();
+
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const [current, setCurrent] = useState<Date>(() => {
     if (value) {
-      const [year, month, day] = value.split("-").map(Number);
-      if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+      const [year, month, day] = value
+        .split("-")
+        .map(Number);
+
+      if (
+        !Number.isNaN(year) &&
+        !Number.isNaN(month) &&
+        !Number.isNaN(day)
+      ) {
         return new Date(year, month - 1, day);
       }
     }
@@ -308,74 +448,95 @@ function FilterDateField({
   });
 
   useEffect(() => {
-    if (!value) return;
+    if (!value) {
+      return;
+    }
 
-    const [year, month, day] = value.split("-").map(Number);
-    if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+    const [year, month, day] = value
+      .split("-")
+      .map(Number);
+
+    if (
+      !Number.isNaN(year) &&
+      !Number.isNaN(month) &&
+      !Number.isNaN(day)
+    ) {
       setCurrent(new Date(year, month - 1, day));
     }
   }, [value]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
 
-    function handleClickOutside(e: MouseEvent) {
-      if (!containerRef.current) return;
-      if (!containerRef.current.contains(e.target as Node)) {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
         setOpen(false);
       }
     }
 
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        handleClickOutside,
+      );
+    };
   }, [open]);
 
-  const displayValue = useMemo(() => {
-    if (!value) return "";
-    const [year, month, day] = value.split("-");
-    if (!year || !month || !day) return "";
-    return `${day}/${month}/${year}`;
-  }, [value]);
-
+  const displayValue = formatDisplayDate(value);
   const year = current.getFullYear();
   const month = current.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDay = (new Date(year, month, 1).getDay() + 6) % 7;
+  const calendarCells = createCalendarCells(year, month);
 
-  const weeks: (number | null)[][] = [];
-  let dayCounter = 1 - firstDay;
-
-  while (dayCounter <= daysInMonth) {
-    const week: (number | null)[] = [];
-
-    for (let i = 0; i < 7; i++) {
-      if (dayCounter < 1 || dayCounter > daysInMonth) {
-        week.push(null);
-      } else {
-        week.push(dayCounter);
-      }
-      dayCounter++;
-    }
-
-    weeks.push(week);
-  }
-
-  const selectedDay = value ? Number(value.split("-")[2]) : null;
+  const [selectedYear, selectedMonth, selectedDay] = value
+    ? value.split("-").map(Number)
+    : [null, null, null];
 
   function toggleOpen() {
-    if (disabled) return;
-    setOpen((prev) => !prev);
+    if (!disabled) {
+      setOpen((currentOpen) => !currentOpen);
+    }
+  }
+
+  function handleInputKeyDown(
+    event: KeyboardEvent<HTMLInputElement>,
+  ) {
+    if (
+      event.key === "Enter" ||
+      event.key === " "
+    ) {
+      event.preventDefault();
+      toggleOpen();
+    }
+
+    if (event.key === "Escape") {
+      setOpen(false);
+    }
   }
 
   function selectDay(day: number) {
-    const mm = String(month + 1).padStart(2, "0");
-    const dd = String(day).padStart(2, "0");
-    onChange(`${year}-${mm}-${dd}`);
+    const monthValue = String(month + 1).padStart(2, "0");
+    const dayValue = String(day).padStart(2, "0");
+
+    onChange(`${year}-${monthValue}-${dayValue}`);
     setOpen(false);
   }
 
   function goMonth(delta: number) {
-    setCurrent((prev) => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
+    setCurrent(
+      (previousDate) =>
+        new Date(
+          previousDate.getFullYear(),
+          previousDate.getMonth() + delta,
+          1,
+        ),
+    );
   }
 
   function clearDate() {
@@ -385,26 +546,39 @@ function FilterDateField({
 
   function setToday() {
     const today = new Date();
-    const yy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, "0");
-    const dd = String(today.getDate()).padStart(2, "0");
+    const todayYear = today.getFullYear();
+    const todayMonth = String(
+      today.getMonth() + 1,
+    ).padStart(2, "0");
+    const todayDay = String(today.getDate()).padStart(
+      2,
+      "0",
+    );
 
-    onChange(`${yy}-${mm}-${dd}`);
+    onChange(`${todayYear}-${todayMonth}-${todayDay}`);
     setCurrent(today);
     setOpen(false);
   }
 
   return (
     <div className={className} ref={containerRef}>
-      <label className="mb-1 block text-[13px] text-slate-600">{label}</label>
+      <label
+        htmlFor={inputId}
+        className="mb-1 block text-[13px] text-slate-600"
+      >
+        {label}
+      </label>
 
       <div className="relative">
         <input
+          id={inputId}
           type="text"
           readOnly
           value={displayValue}
           placeholder="dd/mm/aaaa"
+          aria-controls={open ? panelId : undefined}
           onClick={toggleOpen}
+          onKeyDown={handleInputKeyDown}
           disabled={disabled}
           className={`w-full rounded-lg border py-2 pl-3 pr-9 text-[14px] shadow-sm focus:outline-none focus:ring-2 ${
             disabled
@@ -415,18 +589,27 @@ function FilterDateField({
 
         <button
           type="button"
+          aria-label={`Abrir calendario de ${label}`}
+          aria-controls={open ? panelId : undefined}
           onClick={toggleOpen}
           disabled={disabled}
           className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
         >
-          <CalendarDays className="h-4 w-4" />
+          <CalendarDays
+            aria-hidden="true"
+            className="h-4 w-4"
+          />
         </button>
 
         {open && !disabled && (
-          <div className="absolute z-30 mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 shadow-2xl">
+          <div
+            id={panelId}
+            className="absolute z-30 mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 shadow-2xl"
+          >
             <div className="mb-2 flex items-center justify-between text-[13px] text-slate-700">
               <button
                 type="button"
+                aria-label="Mes anterior"
                 onClick={() => goMonth(-1)}
                 className="rounded-md px-2 py-1 hover:bg-slate-100"
               >
@@ -439,6 +622,7 @@ function FilterDateField({
 
               <button
                 type="button"
+                aria-label="Mes siguiente"
                 onClick={() => goMonth(1)}
                 className="rounded-md px-2 py-1 hover:bg-slate-100"
               >
@@ -453,35 +637,41 @@ function FilterDateField({
             </div>
 
             <div className="mt-1 grid grid-cols-7 gap-1 text-[13px]">
-              {weeks.map((week, weekIndex) =>
-                week.map((day, dayIndex) => {
-                  if (!day) {
-                    return (
-                      <div
-                        key={`${weekIndex}-${dayIndex}`}
-                        className="h-8 rounded-md"
-                      />
-                    );
-                  }
-
-                  const isSelected = day === selectedDay;
-
+              {calendarCells.map((cell) => {
+                if (cell.day === null) {
                   return (
-                    <button
-                      key={`${weekIndex}-${dayIndex}`}
-                      type="button"
-                      onClick={() => selectDay(day)}
-                      className={`h-8 w-full rounded-md text-center ${
-                        isSelected
-                          ? "bg-slate-900 text-white"
-                          : "text-slate-700 hover:bg-slate-100"
-                      }`}
-                    >
-                      {day}
-                    </button>
+                    <div
+                      key={cell.key}
+                      aria-hidden="true"
+                      className="h-8 rounded-md"
+                    />
                   );
-                })
-              )}
+                }
+
+                const isSelected =
+                  selectedYear === year &&
+                  selectedMonth === month + 1 &&
+                  selectedDay === cell.day;
+
+                return (
+                  <button
+                    key={cell.key}
+                    type="button"
+                    aria-label={`${cell.day} de ${MONTHS[month]} de ${year}`}
+                    aria-pressed={isSelected || undefined}
+                    onClick={() =>
+                      selectDay(cell.day as number)
+                    }
+                    className={`h-8 w-full rounded-md text-center ${
+                      isSelected
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    {cell.day}
+                  </button>
+                );
+              })}
             </div>
 
             <div className="mt-3 flex items-center justify-between text-[12px]">

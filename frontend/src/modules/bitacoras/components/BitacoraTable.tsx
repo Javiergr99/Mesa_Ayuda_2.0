@@ -1,4 +1,10 @@
-import { ChevronLeft, ChevronRight, Download, Eye, Trash2 } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Eye,
+  Trash2,
+} from "lucide-react";
 
 type RegistroAbbr = "RMH" | "RMP" | "RDVF" | "RNOA";
 type Estatus = "Pendiente" | "Seguimiento" | "Finalizado";
@@ -30,31 +36,33 @@ type Props = {
   onRequestDelete: (row: Row) => void;
 };
 
-function EstatusBadge({ value }: { value: Estatus }) {
-  const map = {
-    Pendiente: "bg-amber-100 text-amber-800 border-amber-200",
-    Seguimiento: "bg-sky-100 text-sky-800 border-sky-200",
-    Finalizado: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  } as const;
+const ESTATUS_STYLES: Record<Estatus, string> = {
+  Pendiente: "border-amber-200 bg-amber-100 text-amber-800",
+  Seguimiento: "border-sky-200 bg-sky-100 text-sky-800",
+  Finalizado: "border-emerald-200 bg-emerald-100 text-emerald-800",
+};
 
+const REGISTRO_STYLES: Record<RegistroAbbr, string> = {
+  RMH: "bg-fuchsia-50 text-fuchsia-700 ring-1 ring-fuchsia-200",
+  RMP: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200",
+  RDVF: "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
+  RNOA: "bg-sky-50 text-sky-700 ring-1 ring-sky-200",
+};
+
+function EstatusBadge({ value }: { value: Estatus }) {
   return (
-    <span className={`rounded-full border px-2 py-1 text-[12px] ${map[value]}`}>
+    <span
+      className={`rounded-full border px-2 py-1 text-[12px] ${ESTATUS_STYLES[value]}`}
+    >
       {value}
     </span>
   );
 }
 
 function RegistroBadge({ code }: { code: RegistroAbbr }) {
-  const map: Record<RegistroAbbr, string> = {
-    RMH: "bg-fuchsia-50 text-fuchsia-700 ring-1 ring-fuchsia-200",
-    RMP: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200",
-    RDVF: "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
-    RNOA: "bg-sky-50 text-sky-700 ring-1 ring-sky-200",
-  };
-
   return (
     <span
-      className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-[12px] font-semibold ${map[code]}`}
+      className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-[12px] font-semibold ${REGISTRO_STYLES[code]}`}
     >
       {code}
     </span>
@@ -76,19 +84,38 @@ export default function BitacoraTable({
   onRequestDelete,
 }: Props) {
   return (
-    <section className="mt-4 rounded-xl border border-slate-200 bg-white p-2 shadow-sm md:p-3">
+    <section
+      aria-label="Resultados de bitácoras"
+      className="mt-4 rounded-xl border border-slate-200 bg-white p-2 shadow-sm md:p-3"
+    >
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-200">
           <thead>
             <tr className="text-left text-[12px] uppercase tracking-wide text-slate-500">
-              <th className="px-3 py-2">Folio</th>
-              <th className="px-3 py-2">Nombre</th>
-              <th className="px-3 py-2">Estado</th>
-              <th className="px-3 py-2">Registro</th>
-              <th className="px-3 py-2">Tipo de caso</th>
-              <th className="px-3 py-2">Atendido por</th>
-              <th className="px-3 py-2">Estatus</th>
-              <th className="px-3 py-2">Acciones</th>
+              <th scope="col" className="px-3 py-2">
+                Folio
+              </th>
+              <th scope="col" className="px-3 py-2">
+                Nombre
+              </th>
+              <th scope="col" className="px-3 py-2">
+                Estado
+              </th>
+              <th scope="col" className="px-3 py-2">
+                Registro
+              </th>
+              <th scope="col" className="px-3 py-2">
+                Tipo de caso
+              </th>
+              <th scope="col" className="px-3 py-2">
+                Atendido por
+              </th>
+              <th scope="col" className="px-3 py-2">
+                Estatus
+              </th>
+              <th scope="col" className="px-3 py-2">
+                Acciones
+              </th>
             </tr>
           </thead>
 
@@ -111,27 +138,33 @@ export default function BitacoraTable({
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-2 text-slate-600">
                     <button
-                      className="rounded-md border border-slate-200 p-1 hover:bg-slate-50"
-                      title="Ver / Actualizar"
+                      type="button"
+                      aria-label={`Ver o actualizar bitácora ${row.folio}`}
+                      title="Ver o actualizar"
                       onClick={() => onOpenDrawer(row)}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-
-                    <button
                       className="rounded-md border border-slate-200 p-1 hover:bg-slate-50"
-                      title="Descargar PDF"
                     >
-                      <Download className="h-4 w-4" />
+                      <Eye aria-hidden="true" className="h-4 w-4" />
                     </button>
 
                     <button
-                      className="rounded-md border border-rose-200 p-1 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                      type="button"
+                      aria-label={`Descargar PDF de la bitácora ${row.folio}`}
+                      title="Descargar PDF"
+                      className="rounded-md border border-slate-200 p-1 hover:bg-slate-50"
+                    >
+                      <Download aria-hidden="true" className="h-4 w-4" />
+                    </button>
+
+                    <button
+                      type="button"
+                      aria-label={`Eliminar bitácora ${row.folio}`}
                       title="Eliminar"
                       onClick={() => onRequestDelete(row)}
                       disabled={deletingRow}
+                      className="rounded-md border border-rose-200 p-1 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 aria-hidden="true" className="h-4 w-4" />
                     </button>
                   </div>
                 </td>
@@ -140,7 +173,10 @@ export default function BitacoraTable({
 
             {rows.length === 0 && !loading && (
               <tr>
-                <td colSpan={8} className="px-3 py-8 text-center text-slate-500">
+                <td
+                  colSpan={8}
+                  className="px-3 py-8 text-center text-slate-500"
+                >
                   Sin resultados con los filtros aplicados.
                 </td>
               </tr>
@@ -151,15 +187,23 @@ export default function BitacoraTable({
 
       <div className="mt-3 flex flex-col items-center justify-between gap-3 text-[13px] text-slate-600 md:flex-row">
         <div>
-          Mostrando <span className="font-medium text-slate-800">{rows.length}</span>{" "}
+          Mostrando{" "}
+          <span className="font-medium text-slate-800">{rows.length}</span>{" "}
           de <span className="font-medium text-slate-800">{total}</span>
         </div>
 
         <div className="flex items-center gap-3">
           <div className="w-32">
+            <label htmlFor="bitacoras-page-size" className="sr-only">
+              Registros por página
+            </label>
+
             <select
+              id="bitacoras-page-size"
               value={pageSize}
-              onChange={(e) => onPageSizeChange(Number(e.target.value))}
+              onChange={(event) =>
+                onPageSizeChange(Number(event.target.value))
+              }
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-[14px] shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
             >
               <option value={5}>5</option>
@@ -170,23 +214,27 @@ export default function BitacoraTable({
 
           <div className="flex items-center gap-1">
             <button
+              type="button"
+              aria-label="Página anterior"
               onClick={onPrevPage}
               disabled={page === 1}
               className="rounded-md border border-slate-200 p-1 disabled:opacity-50"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft aria-hidden="true" className="h-4 w-4" />
             </button>
 
-            <span className="px-2">
+            <span className="px-2" aria-live="polite">
               {page} / {maxPage}
             </span>
 
             <button
+              type="button"
+              aria-label="Página siguiente"
               onClick={onNextPage}
               disabled={page === maxPage}
               className="rounded-md border border-slate-200 p-1 disabled:opacity-50"
             >
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight aria-hidden="true" className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -194,3 +242,4 @@ export default function BitacoraTable({
     </section>
   );
 }
+

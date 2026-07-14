@@ -1,4 +1,6 @@
+import { useId } from "react";
 import { Filter, Search } from "lucide-react";
+
 import SelectField from "../../../components/ui/SelectField";
 import DateField from "../../../components/ui/DateField";
 
@@ -67,23 +69,40 @@ export default function BitacoraFilters({
   registrosOptions,
   atendidoPorOptions,
 }: Props) {
+  const searchInputId = useId();
+
   return (
-    <section className="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <section
+      aria-label="Filtros de bitácoras"
+      className="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+    >
       <div className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
-        <Filter className="h-4 w-4" />
+        <Filter aria-hidden="true" className="h-4 w-4" />
         <span>Filtros</span>
       </div>
 
       <div className="grid grid-cols-12 gap-3">
         <div className="col-span-12 md:col-span-4">
-          <label className="mb-1 block text-[13px] text-slate-600">
+          <label
+            htmlFor={searchInputId}
+            className="mb-1 block text-[13px] text-slate-600"
+          >
             Búsqueda
           </label>
+
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+            />
+
             <input
+              id={searchInputId}
+              type="search"
               value={qInput}
-              onChange={(e) => onQInputChange(e.target.value)}
+              onChange={(event) =>
+                onQInputChange(event.target.value)
+              }
               placeholder="Folio, nombre, estado, registro, tipo, atendido por, estatus…"
               className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-[14px] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
             />
@@ -159,6 +178,7 @@ export default function BitacoraFilters({
           >
             Limpiar
           </button>
+
           <button
             type="button"
             onClick={onApply}
@@ -170,11 +190,15 @@ export default function BitacoraFilters({
       </div>
 
       {loading && (
-        <p className="mt-3 text-[13px] text-slate-500">Cargando bitácoras…</p>
+        <p className="mt-3 text-[13px] text-slate-500">
+          Cargando bitácoras…
+        </p>
       )}
 
       {loadError && (
-        <p className="mt-3 text-[13px] text-rose-600">{loadError}</p>
+        <p className="mt-3 text-[13px] text-rose-600">
+          {loadError}
+        </p>
       )}
     </section>
   );

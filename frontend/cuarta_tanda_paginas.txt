@@ -1,0 +1,1784 @@
+﻿================================================================================
+ARCHIVO: src/modules/bitacoras/pages/BitacoraRegistrarPage.tsx
+================================================================================
+
+import React, { useEffect, useMemo, useState } from "react";
+import { AlertCircle, CheckCircle2, Info, Mail, Paperclip } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+
+import { createBitacora } from "../../../services/bitacoras.service";
+import {
+  getEstados,
+  getTiposCaso,
+  getPersonasAtendio,
+  getEstatusBitacora,
+  getTiposRegistro,
+} from "../../../services/catalogos.service";
+
+import PageHeader from "../../../components/ui/PageHeader";
+import CardSection from "../../../components/ui/CardSection";
+import TextField from "../../../components/ui/TextField";
+import TextAreaField from "../../../components/ui/TextAreaField";
+import ConfirmDialog from "../../../components/ui/ConfirmDialog";
+import SelectField from "../../../components/ui/SelectField";
+import ComboSelectField from "../../../components/ui/ComboSelectField";
+import DateField from "../../../components/ui/DateField";
+import TimeField from "../../../components/ui/TimeField";
+import FileChips from "../../../components/ui/FileChips";
+
+type BitacoraForm = {
+  nombre: string;
+  primer_apellido: string;
+  segundo_apellido: string;
+  correo: string;
+  telefono: string;
+  estado: string;
+  instancia: string;
+  fecha: string;
+  hora: string;
+  tipo_caso: string;
+  atendido_por: string;
+  observaciones: string;
+  estatus: string;
+  tipo_registro: string;
+};
+
+const INITIAL_FORM: BitacoraForm = {
+  nombre: "",
+  primer_apellido: "",
+  segundo_apellido: "",
+  correo: "",
+  telefono: "",
+  estado: "",
+  instancia: "",
+  fecha: "",
+  hora: "",
+  tipo_caso: "",
+  atendido_por: "",
+  observaciones: "",
+  estatus: "",
+  tipo_registro: "",
+};
+
+export default function BitacoraRegistrarPage() {
+  const navigate = useNavigate();
+
+  const [saving, setSaving] = useState(false);
+  const [okMsg, setOkMsg] = useState("");
+  const [errMsg, setErrMsg] = useState("");
+  const [triedSubmit, setTriedSubmit] = useState(false);
+
+  const [files, setFiles] = useState<File[]>([]);
+  const [emailFile, setEmailFile] = useState<File | null>(null);
+
+  const [estados, setEstados] = useState<string[]>([]);
+  const [tiposCaso, setTiposCaso] = useState<string[]>([]);
+  const [personasAtiende, setPersonasAtiende] = useState<string[]>([]);
+  const [estatusOpts, setEstatusOpts] = useState<string[]>([]);
+  const [tiposRegistro, setTiposRegistro] = useState<string[]>([]);
+
+  const [form, setForm] = useState<BitacoraForm>(INITIAL_FORM);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const required = useMemo(
+    () =>
+      [
+        "nombre",
+        "estado",
+        "fecha",
+        "hora",
+        "tipo_caso",
+        "atendido_por",
+        "estatus",
+        "tipo_registro",
+      ] as const,
+    []
+  );
+
+  const atendidoPorOptions = useMemo(
+    () =>
+      [...personasAtiende].sort((a, b) =>
+        a.localeCompare(b, "es", { sensitivity: "base" })
+      ),
+    [personasAtiende]
+  );
+
+  const formIsDirty = useMemo(() => {
+    const anyValue = Object.values(form).some((v) => v.trim().length > 0);
+    return anyValue || files.length > 0 || !!emailFile;
+  }, [form, files, emailFile]);
+
+  useEffect(() => {
+    async function loadCatalogos() {
+      try {
+        const [
+          estadosRes,
+          tiposCasoRes,
+          personasRes,
+          estatusRes,
+          tiposRegRes,
+        ] = await Promise.all([
+          getEstados(),
+          getTiposCaso(),
+          getPersonasAtendio(),
+          getEstatusBitacora(),
+          getTiposRegistro(),
+        ]);
+
+        setEstados(estadosRes.map((e: any) => e.nombre));
+        setTiposCaso(tiposCasoRes.map((e: any) => e.nombre));
+        setPersonasAtiende(
+          personasRes.map((e: any) => e.nombre_completo ?? e.nombre)
+        );
+        setEstatusOpts(estatusRes.map((e: any) => e.nombre));
+        setTiposRegistro(tiposRegRes.map((e: any) => e.nombre));
+      } catch (error) {
+        console.error("Error cargando catÃ¡logos", error);
+        setErrMsg(
+          "No se pudieron cargar los catÃ¡logos. Intenta de nuevo."
+        );
+      }
+    }
+
+    loadCatalogos();
+  }, []);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setShowConfirm(false);
+    }
+
+    document.addEventListener("keydown", onKey);
+
+    if (showConfirm) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+
+      return () => {
+        document.removeEventListener("keydown", onKey);
+        document.body.style.overflow = prev;
+      };
+    }
+
+    return () => document.removeEventListener("keydown", onKey);
+  }, [showConfirm]);
+
+  function safeNavigateHome() {
+    navigate("/app", { replace: false });
+  }
+
+  function onChange<K extends keyof BitacoraForm>(key: K, value: BitacoraForm[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function validate() {
+    const missing = required.filter((key) => !form[key]?.trim());
+
+    if (missing.length > 0) {
+      setErrMsg(`Revisa campos requeridos: ${missing.join(", ")}`);
+      setOkMsg("");
+      return false;
+    }
+
+    setErrMsg("");
+    return true;
+  }
+
+  function onSelectFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const list = e.target.files ? Array.from(e.target.files) : [];
+    setFiles((prev) => [...prev, ...list]);
+    e.target.value = "";
+  }
+
+  function removeFile(index: number) {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function onSelectEmail(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] || null;
+    setEmailFile(file);
+    e.target.value = "";
+  }
+
+  function onCancelClick() {
+    if (formIsDirty) {
+      setShowConfirm(true);
+      return;
+    }
+    safeNavigateHome();
+  }
+
+  function confirmLeave() {
+    setShowConfirm(false);
+    safeNavigateHome();
+  }
+
+  function onSaveDraftClick() {
+    setOkMsg("Borrador guardado (preview).");
+    setErrMsg("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+
+    if (!validate()) {
+      setTriedSubmit(true);
+      return;
+    }
+
+    setTriedSubmit(false);
+    setSaving(true);
+    setOkMsg("");
+    setErrMsg("");
+
+    try {
+      const payload = {
+        nombre: form.nombre.trim(),
+        primer_apellido: form.primer_apellido.trim() || null,
+        segundo_apellido: form.segundo_apellido.trim() || null,
+        correo: form.correo.trim() || null,
+        telefono: form.telefono.trim() || null,
+        estado: form.estado,
+        instancia: form.instancia.trim() || null,
+        fecha: form.fecha,
+        hora: form.hora,
+        tipo_caso: form.tipo_caso,
+        atendido_por: form.atendido_por,
+        observaciones: form.observaciones.trim() || null,
+        estatus: form.estatus,
+        tipo_registro: form.tipo_registro,
+      };
+
+      const res = await createBitacora(payload);
+
+      setOkMsg(`BitÃ¡cora registrada correctamente. Folio: ${res.folio}`);
+      setErrMsg("");
+      setForm(INITIAL_FORM);
+      setFiles([]);
+      setEmailFile(null);
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (error: any) {
+      console.error(error);
+      const detail =
+        error?.response?.data?.detail ||
+        error?.message ||
+        "OcurriÃ³ un error al guardar la bitÃ¡cora.";
+      setErrMsg(detail);
+      setOkMsg("");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-[#F6F7F9] text-slate-800">
+      <PageHeader
+        breadcrumb="BitÃ¡cora â€º Registrar"
+        title="Registrar atenciÃ³n"
+      />
+
+      <form onSubmit={onSubmit} className="mx-auto max-w-[1200px] px-6 pb-28">
+        {okMsg && (
+          <div className="mb-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-800">
+            <CheckCircle2 className="mt-0.5 h-5 w-5" />
+            <div>{okMsg}</div>
+          </div>
+        )}
+
+        {errMsg && (
+          <div className="mb-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-rose-700">
+            <AlertCircle className="mt-0.5 h-5 w-5" />
+            <div>{errMsg}</div>
+          </div>
+        )}
+
+        <CardSection title="Datos de la persona">
+          <div className="grid grid-cols-12 gap-4">
+            <TextField
+              label="Nombre *"
+              value={form.nombre}
+              onChange={(v) => onChange("nombre", v)}
+              className="col-span-12 md:col-span-4"
+              placeholder="Nombre"
+            />
+            <TextField
+              label="Primer apellido"
+              value={form.primer_apellido}
+              onChange={(v) => onChange("primer_apellido", v)}
+              className="col-span-12 md:col-span-4"
+              placeholder="Primer apellido"
+            />
+            <TextField
+              label="Segundo apellido"
+              value={form.segundo_apellido}
+              onChange={(v) => onChange("segundo_apellido", v)}
+              className="col-span-12 md:col-span-4"
+              placeholder="Segundo apellido"
+            />
+            <TextField
+              label="Correo"
+              type="email"
+              value={form.correo}
+              onChange={(v) => onChange("correo", v)}
+              className="col-span-12 md:col-span-6"
+              placeholder="correo@dominio"
+              icon={<Mail className="h-4 w-4 text-slate-400" />}
+            />
+            <TextField
+              label="TelÃ©fono"
+              value={form.telefono}
+              onChange={(v) => onChange("telefono", v)}
+              className="col-span-12 md:col-span-6"
+              placeholder="+52 ___ ___ ____"
+            />
+          </div>
+        </CardSection>
+
+        <CardSection title="UbicaciÃ³n / InstituciÃ³n">
+          <div className="grid grid-cols-12 gap-4">
+            <SelectField
+              label="Estado *"
+              value={form.estado}
+              onChange={(v) => onChange("estado", v)}
+              options={estados}
+              className="col-span-12 md:col-span-6"
+              placeholder="Seleccionaâ€¦"
+              error={triedSubmit && !form.estado}
+            />
+            <TextField
+              label="Instancia"
+              value={form.instancia}
+              onChange={(v) => onChange("instancia", v)}
+              className="col-span-12 md:col-span-6"
+              placeholder="Dependencia / Ã¡rea"
+            />
+          </div>
+        </CardSection>
+
+        <CardSection title="Detalles del caso">
+          <div className="grid grid-cols-12 gap-4">
+            <DateField
+              label="Fecha *"
+              value={form.fecha}
+              onChange={(v) => onChange("fecha", v)}
+              className="col-span-12 md:col-span-3"
+              placeholder="dd/mm/aaaa"
+              error={triedSubmit && !form.fecha}
+            />
+            <TimeField
+              label="Hora *"
+              value={form.hora}
+              onChange={(v) => onChange("hora", v)}
+              className="col-span-12 md:col-span-3"
+              placeholder="hh:mm"
+              error={triedSubmit && !form.hora}
+            />
+            <SelectField
+              label="Tipo de caso *"
+              value={form.tipo_caso}
+              onChange={(v) => onChange("tipo_caso", v)}
+              options={tiposCaso}
+              className="col-span-12 md:col-span-3"
+              placeholder="Seleccionaâ€¦"
+              error={triedSubmit && !form.tipo_caso}
+            />
+            <ComboSelectField
+              label="Atendido por *"
+              value={form.atendido_por}
+              onChange={(v) => onChange("atendido_por", v)}
+              options={atendidoPorOptions}
+              className="col-span-12 md:col-span-3"
+              placeholder="Busca o seleccionaâ€¦"
+              error={triedSubmit && !form.atendido_por}
+            />
+            <TextAreaField
+              label="Observaciones"
+              value={form.observaciones}
+              onChange={(v) => onChange("observaciones", v)}
+              className="col-span-12"
+              placeholder="Notas de la atenciÃ³nâ€¦"
+              maxLength={1500}
+            />
+          </div>
+        </CardSection>
+
+        <CardSection title="Metadatos">
+          <div className="grid grid-cols-12 gap-4">
+            <SelectField
+              label="Estatus *"
+              value={form.estatus}
+              onChange={(v) => onChange("estatus", v)}
+              options={estatusOpts}
+              className="col-span-12 md:col-span-6"
+              placeholder="Seleccionaâ€¦"
+              error={triedSubmit && !form.estatus}
+            />
+            <SelectField
+              label="Tipo de registro *"
+              value={form.tipo_registro}
+              onChange={(v) => onChange("tipo_registro", v)}
+              options={tiposRegistro}
+              className="col-span-12 md:col-span-6"
+              placeholder="Seleccionaâ€¦"
+              error={triedSubmit && !form.tipo_registro}
+            />
+          </div>
+        </CardSection>
+
+        <CardSection title="Archivos">
+          <div className="grid grid-cols-12 gap-4">
+            <div className="col-span-12">
+              <label className="mb-1 block text-[13px] text-slate-600">
+                Anexos (.pdf, .docx, .xlsx, .csv, .jpg, .png)
+              </label>
+              <div className="flex items-center gap-3">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 hover:bg-slate-50">
+                  <Paperclip className="h-4 w-4 text-slate-500" />
+                  <span className="text-[14px]">Elegir archivos</span>
+                  <input
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={onSelectFiles}
+                  />
+                </label>
+                <span className="text-[12px] text-slate-500">
+                  Hasta 10MB por archivo
+                </span>
+              </div>
+
+              <FileChips
+                items={files.map((f, i) => ({ id: i, name: f.name }))}
+                onRemove={(id) => removeFile(Number(id))}
+              />
+            </div>
+
+            <div className="col-span-12">
+              <label className="mb-1 block text-[13px] text-slate-600">
+                Correo (.MSG)
+              </label>
+              <div className="flex items-center gap-3">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 hover:bg-slate-50">
+                  <Mail className="h-4 w-4 text-slate-500" />
+                  <span className="text-[14px]">Subir .MSG</span>
+                  <input
+                    type="file"
+                    accept=".msg"
+                    className="hidden"
+                    onChange={onSelectEmail}
+                  />
+                </label>
+                <span className="text-[12px] text-slate-500">MÃ¡x 15MB</span>
+              </div>
+
+              <FileChips
+                items={emailFile ? [{ id: 0, name: emailFile.name }] : []}
+                onRemove={() => setEmailFile(null)}
+                icon="mail"
+              />
+            </div>
+          </div>
+        </CardSection>
+
+        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200/80 bg-white/90 shadow-[0_-4px_12px_rgba(2,6,23,0.06)] backdrop-blur supports-[backdrop-filter]:bg-white/75">
+          <div className="mx-auto flex max-w-[1200px] items-center justify-end gap-3 px-6 py-3">
+            <button
+              type="button"
+              onClick={onCancelClick}
+              disabled={showConfirm}
+              className="rounded-xl px-3 py-2 text-[14px] text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={onSaveDraftClick}
+              disabled={showConfirm}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-[14px] shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Guardar borrador
+            </button>
+            <button
+              type="submit"
+              disabled={saving || showConfirm}
+              className="rounded-xl bg-slate-900 px-5 py-2.5 text-[14px] text-white shadow-md transition-colors hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:opacity-60"
+            >
+              {saving ? "Guardandoâ€¦" : "Guardar"}
+            </button>
+          </div>
+        </div>
+      </form>
+
+      <ConfirmDialog
+        open={showConfirm}
+        title="Â¿Salir sin guardar?"
+        message="Los cambios no guardados se perderÃ¡n."
+        onCancel={() => setShowConfirm(false)}
+        onConfirm={confirmLeave}
+        cancelText="Seguir editando"
+        confirmText="Salir sin guardar"
+        confirmVariant="danger"
+      />
+
+      <div className="mx-auto flex max-w-[1200px] items-start gap-2 px-6 py-8 text-sm text-slate-500">
+        <Info className="mt-1 h-4 w-4" />
+        <p>
+          Este formulario ya envÃ­a la informaciÃ³n de la bitÃ¡cora al backend de
+          Mesa de Ayuda 2.0 y usa catÃ¡logos desde la base de datos.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+
+================================================================================
+ARCHIVO: src/modules/bitacoras/pages/BitacoraSeguimientoPage.tsx
+================================================================================
+
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import PageHeader from "../../../components/ui/PageHeader";
+import ConfirmDialog from "../../../components/ui/ConfirmDialog";
+import BitacoraFilters from "../components/BitacoraFilters";
+import BitacoraTable from "../components/BitacoraTable";
+import ActualizarBitacoraDrawer from "../components/ActualizarBitacoraDrawer";
+
+import {
+  listBitacoras,
+  getBitacoraById,
+  updateBitacora,
+  deleteBitacora,
+  listBitacoraFiles,
+  uploadBitacoraFiles,
+  deleteBitacoraFile,
+} from "../../../services/bitacoras.service";
+
+/**
+ * Mesa Ayuda 2.0 â€“ Seguimiento de BitÃ¡coras
+ * Refactorizado para separar lÃ³gica de pÃ¡gina y UI reutilizable
+ */
+
+const ESTADOS_MX = [
+  "Aguascalientes",
+  "Baja California",
+  "Baja California Sur",
+  "Campeche",
+  "Chiapas",
+  "Chihuahua",
+  "Ciudad de MÃ©xico",
+  "Coahuila",
+  "Colima",
+  "Durango",
+  "Estado de MÃ©xico",
+  "Guanajuato",
+  "Guerrero",
+  "Hidalgo",
+  "Jalisco",
+  "MichoacÃ¡n",
+  "Morelos",
+  "Nayarit",
+  "Nuevo LeÃ³n",
+  "Oaxaca",
+  "Puebla",
+  "QuerÃ©taro",
+  "Quintana Roo",
+  "San Luis PotosÃ­",
+  "Sinaloa",
+  "Sonora",
+  "Tabasco",
+  "Tamaulipas",
+  "Tlaxcala",
+  "Veracruz",
+  "YucatÃ¡n",
+  "Zacatecas",
+];
+
+const ESTATUS = ["Pendiente", "Seguimiento", "Finalizado"] as const;
+type Estatus = (typeof ESTATUS)[number];
+
+const TIPOS = [
+  "Alta usuario",
+  "Baja usuario",
+  "ActualizaciÃ³n de datos",
+  "RecuperaciÃ³n de cuentas",
+  "Fallas en el sistema",
+  "EliminaciÃ³n de registros",
+  "OrientaciÃ³n por aplicaciÃ³n",
+  "Formato de solicitud",
+] as const;
+
+const REGISTROS = ["RMH", "RMP", "RDVF", "RNOA"] as const;
+type RegistroAbbr = (typeof REGISTROS)[number];
+
+const REGISTROS_LABELS = [
+  "Registro de Movilidad Humana",
+  "Registro de Medidas de ProtecciÃ³n",
+  "Registro de Derecho a Vivir en Familia",
+  "Registro Nacional de Obligaciones Alimentarias",
+] as const;
+type RegistroLabel = (typeof REGISTROS_LABELS)[number];
+
+const REGISTRO_LABEL_TO_CODE: Record<RegistroLabel, RegistroAbbr> = {
+  "Registro de Movilidad Humana": "RMH",
+  "Registro de Medidas de ProtecciÃ³n": "RMP",
+  "Registro de Derecho a Vivir en Familia": "RDVF",
+  "Registro Nacional de Obligaciones Alimentarias": "RNOA",
+};
+
+const ESTATUS_OPTS: string[] = ["", ...Array.from(ESTATUS)];
+const TIPOS_OPTS: string[] = ["", ...Array.from(TIPOS)];
+const REGISTROS_OPTS: string[] = ["", ...Array.from(REGISTROS)];
+
+const ATENDIDO_POR = [
+  "Arturo Reyes Alcauter",
+  "Brandon Joel Cabalceta Brenes",
+  "Danton Bazaldua Morquecho",
+  "Fabiola Azucena Gutierrez",
+  "Gustavo Gonzalez Cabrera",
+  "Javier Garcia Lucero",
+  "Jocelyn Romero Carrillo",
+  "Monica Gabriela De la Luz Eslava",
+].sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+
+export type Row = {
+  id: number;
+  folio: string;
+  fecha: string;
+  registro: RegistroAbbr;
+  estado: string;
+  tipo: string;
+  estatus: Estatus;
+  atendido_por: string;
+  nombre: string;
+};
+
+export type BitacoraDetail = {
+  id: number;
+  folio: string;
+  nombre: string;
+  primer_apellido: string | null;
+  segundo_apellido: string | null;
+  correo: string | null;
+  telefono: string | null;
+  estado: string;
+  instancia: string | null;
+  fecha: string;
+  hora: string;
+  tipo_caso: string;
+  atendido_por: string;
+  observaciones: string | null;
+  estatus: Estatus | string;
+  tipo_registro: string;
+  created_at: string;
+  updated_at: string | null;
+  usuario_id: number;
+};
+
+export type ArchivoBitacoraItem = {
+  id: number;
+  original_name: string;
+  stored_name: string;
+  content_type: string | null;
+  size_bytes: number;
+  created_at: string;
+};
+
+function buildNombre(b: any): string {
+  return [b.nombre, b.primer_apellido, b.segundo_apellido]
+    .filter((x) => !!x && String(x).trim().length > 0)
+    .join(" ");
+}
+
+export default function BitacoraSeguimientoPage() {
+  const [data, setData] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [qInput, setQInput] = useState("");
+  const [q, setQ] = useState("");
+
+  const [estado, setEstado] = useState("");
+  const [estatus, setEstatus] = useState<Estatus | "">("");
+  const [tipo, setTipo] = useState("");
+  const [registro, setRegistro] = useState<RegistroAbbr | "">("");
+  const [atendidoFiltro, setAtendidoFiltro] = useState("");
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
+
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
+  const [sortBy] = useState<keyof Row>("fecha");
+  const [sortDir] = useState<"asc" | "desc">("desc");
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editBitacora, setEditBitacora] = useState<BitacoraDetail | null>(null);
+  const [drawerLoading, setDrawerLoading] = useState(false);
+  const [drawerError, setDrawerError] = useState<string | null>(null);
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [toDelete, setToDelete] = useState<Row | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [deletingRow, setDeletingRow] = useState(false);
+
+  useEffect(() => {
+    const id = setTimeout(() => setQ(qInput.trim()), 250);
+    return () => clearTimeout(id);
+  }, [qInput]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchBitacoras() {
+      setLoading(true);
+      setLoadError(null);
+
+      try {
+        const res = await listBitacoras();
+        if (cancelled) return;
+
+        const rows: Row[] = (res || []).map((b: any) => {
+          const label = b.tipo_registro as RegistroLabel;
+          const registroCode: RegistroAbbr =
+            REGISTRO_LABEL_TO_CODE[label] ?? "RMH";
+
+          return {
+            id: b.id,
+            folio: b.folio,
+            fecha: b.fecha,
+            registro: registroCode,
+            estado: b.estado,
+            tipo: b.tipo_caso,
+            estatus: b.estatus as Estatus,
+            atendido_por: b.atendido_por,
+            nombre: buildNombre(b),
+          };
+        });
+
+        setData(rows);
+      } catch (err: any) {
+        console.error(err);
+        setLoadError(
+          err?.response?.data?.detail ||
+            err?.message ||
+            "No se pudo cargar la lista de bitÃ¡coras."
+        );
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    fetchBitacoras();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [q, estado, estatus, tipo, registro, atendidoFiltro, desde, hasta, pageSize]);
+
+  const filtered = useMemo(() => {
+    let list = data;
+
+    if (q) {
+      const qq = q.toLowerCase();
+      list = list.filter((r) => {
+        const estatusText = String(r.estatus).toLowerCase();
+        return (
+          r.folio.toLowerCase().includes(qq) ||
+          r.nombre.toLowerCase().includes(qq) ||
+          r.estado.toLowerCase().includes(qq) ||
+          r.registro.toLowerCase().includes(qq) ||
+          r.tipo.toLowerCase().includes(qq) ||
+          r.atendido_por.toLowerCase().includes(qq) ||
+          estatusText.includes(qq)
+        );
+      });
+    }
+
+    if (estado) list = list.filter((r) => r.estado === estado);
+    if (estatus) list = list.filter((r) => r.estatus === estatus);
+    if (tipo) list = list.filter((r) => r.tipo === tipo);
+    if (registro) list = list.filter((r) => r.registro === registro);
+    if (atendidoFiltro) {
+      list = list.filter((r) => r.atendido_por === atendidoFiltro);
+    }
+    if (desde) list = list.filter((r) => r.fecha >= desde);
+    if (hasta) list = list.filter((r) => r.fecha <= hasta);
+
+    return [...list].sort((a, b) => {
+      const va = a[sortBy] as unknown as string;
+      const vb = b[sortBy] as unknown as string;
+
+      if (va < vb) return sortDir === "asc" ? -1 : 1;
+      if (va > vb) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [data, q, estado, estatus, tipo, registro, atendidoFiltro, desde, hasta, sortBy, sortDir]);
+
+  const total = filtered.length;
+  const maxPage = Math.max(1, Math.ceil(total / pageSize));
+
+  const pageData = useMemo(
+    () => filtered.slice((page - 1) * pageSize, page * pageSize),
+    [filtered, page, pageSize]
+  );
+
+  const requestDelete = useCallback((row: Row) => {
+    setToDelete(row);
+    setConfirmOpen(true);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (!toDelete) return;
+
+    setDeletingRow(true);
+
+    try {
+      await deleteBitacora(toDelete.id);
+
+      setData((prev) => prev.filter((r) => r.id !== toDelete.id));
+      setConfirmOpen(false);
+      setToDelete(null);
+
+      const remaining = Math.max(0, total - 1);
+      const newMax = Math.max(1, Math.ceil(remaining / pageSize));
+      setPage((p) => Math.min(p, newMax));
+
+      setToast("Registro eliminado correctamente.");
+      setTimeout(() => setToast(null), 1600);
+    } catch (err: any) {
+      console.error(err);
+      setToast(
+        err?.response?.data?.detail ||
+          err?.message ||
+          "No se pudo eliminar la bitÃ¡cora. IntÃ©ntalo de nuevo."
+      );
+      setTimeout(() => setToast(null), 2200);
+    } finally {
+      setDeletingRow(false);
+    }
+  }, [toDelete, total, pageSize]);
+
+  const openDrawer = useCallback(async (row: Row) => {
+    setDrawerOpen(true);
+    setDrawerLoading(true);
+    setDrawerError(null);
+    setEditBitacora(null);
+
+    try {
+      const b: BitacoraDetail = await getBitacoraById(row.id);
+      const est = b.estatus as Estatus;
+
+      setEditBitacora({
+        ...b,
+        estatus: est,
+      });
+    } catch (err: any) {
+      console.error(err);
+      setDrawerError(
+        err?.response?.data?.detail ||
+          err?.message ||
+          "No se pudo cargar el detalle de la bitÃ¡cora."
+      );
+    } finally {
+      setDrawerLoading(false);
+    }
+  }, []);
+
+  const handleUpdatedBitacora = useCallback((updated: BitacoraDetail) => {
+    setData((prev) =>
+      prev.map((r) => {
+        if (r.id !== updated.id) return r;
+
+        const label = updated.tipo_registro as RegistroLabel;
+        const registroCode: RegistroAbbr =
+          REGISTRO_LABEL_TO_CODE[label] ?? r.registro;
+
+        return {
+          ...r,
+          folio: updated.folio,
+          fecha: updated.fecha,
+          registro: registroCode,
+          estado: updated.estado,
+          tipo: updated.tipo_caso,
+          estatus: updated.estatus as Estatus,
+          atendido_por: updated.atendido_por,
+          nombre: buildNombre(updated),
+        };
+      })
+    );
+
+    setToast("BitÃ¡cora actualizada.");
+    setTimeout(() => setToast(null), 1600);
+  }, []);
+
+  function clearFilters() {
+    setQInput("");
+    setEstado("");
+    setEstatus("");
+    setTipo("");
+    setRegistro("");
+    setAtendidoFiltro("");
+    setDesde("");
+    setHasta("");
+  }
+
+  return (
+    <div className="min-h-screen bg-[#F6F7F9] text-slate-800">
+      <PageHeader
+        breadcrumb="BitÃ¡cora â€º Seguimiento"
+        title="Seguimiento de BitÃ¡coras"
+      />
+
+      <div className="mx-auto max-w-[1200px] px-6 pb-20">
+        <BitacoraFilters
+          qInput={qInput}
+          onQInputChange={setQInput}
+          estado={estado}
+          onEstadoChange={setEstado}
+          estatus={estatus}
+          onEstatusChange={(value) => setEstatus(value as Estatus | "")}
+          tipo={tipo}
+          onTipoChange={setTipo}
+          registro={registro}
+          onRegistroChange={(value) => setRegistro(value as RegistroAbbr | "")}
+          atendidoFiltro={atendidoFiltro}
+          onAtendidoFiltroChange={setAtendidoFiltro}
+          desde={desde}
+          onDesdeChange={setDesde}
+          hasta={hasta}
+          onHastaChange={setHasta}
+          onClear={() => {
+            setQInput("");
+            setEstado("");
+            setEstatus("");
+            setTipo("");
+            setRegistro("");
+            setAtendidoFiltro("");
+            setDesde("");
+            setHasta("");
+          }}
+          onApply={() => setPage(1)}
+          loading={loading}
+          loadError={loadError}
+          estadosOptions={["", ...ESTADOS_MX]}
+          estatusOptions={ESTATUS_OPTS}
+          tiposOptions={TIPOS_OPTS}
+          registrosOptions={REGISTROS_OPTS}
+          atendidoPorOptions={["", ...ATENDIDO_POR]}
+        />
+
+        <BitacoraTable
+          rows={pageData}
+          total={total}
+          page={page}
+          maxPage={maxPage}
+          pageSize={pageSize}
+          loading={loading}
+          deletingRow={deletingRow}
+          onPageSizeChange={(value: number) => {
+            setPageSize(value);
+            setPage(1);
+          }}
+          onPrevPage={() => setPage((p) => Math.max(1, p - 1))}
+          onNextPage={() => setPage((p) => Math.min(maxPage, p + 1))}
+          onOpenDrawer={openDrawer}
+          onRequestDelete={requestDelete}
+        />
+      </div>
+
+      {drawerOpen && (
+        <ActualizarBitacoraDrawer
+          bitacora={editBitacora}
+          loading={drawerLoading}
+          error={drawerError}
+          onClose={() => {
+            setDrawerOpen(false);
+            setEditBitacora(null);
+            setDrawerError(null);
+          }}
+          onUpdated={(updated) => handleUpdatedBitacora(updated as BitacoraDetail)}
+          listBitacoraFiles={listBitacoraFiles}
+          uploadBitacoraFiles={uploadBitacoraFiles}
+          deleteBitacoraFile={deleteBitacoraFile}
+          updateBitacora={updateBitacora}
+        />
+      )}
+
+      <ConfirmDialog
+        open={confirmOpen && !!toDelete}
+        title="Eliminar registro"
+        message={
+          toDelete
+            ? `Â¿Seguro que deseas eliminar el folio ${toDelete.folio} â€“ ${toDelete.nombre}? Esta acciÃ³n no se puede deshacer.`
+            : ""
+        }
+        onCancel={() => {
+          setConfirmOpen(false);
+          setToDelete(null);
+        }}
+        onConfirm={confirmDelete}
+        cancelText="Cancelar"
+        confirmText="Eliminar"
+        confirmVariant="danger"
+      />
+
+      {toast && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-slate-900 px-4 py-2 text-sm text-white shadow-lg">
+          {toast}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+================================================================================
+ARCHIVO: src/modules/solicitudes/pages/SolicitudRegistrarPage.tsx
+================================================================================
+
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { AlertCircle, CheckCircle2, Info, Mail } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+
+import PageHeader from "../../../components/ui/PageHeader";
+import CardSection from "../../../components/ui/CardSection";
+import TextField from "../../../components/ui/TextField";
+import TextAreaField from "../../../components/ui/TextAreaField";
+import SelectField from "../../../components/ui/SelectField";
+import FileUploadField from "../../../components/ui/FileUploadField";
+import ConfirmDialog from "../../../components/ui/ConfirmDialog";
+
+import {
+  AMBITO_SOL,
+  ESTADOS_MX,
+  ESTATUS_SOL,
+  MUNICIPIOS_SOL,
+  PERFIL_SOL,
+  TIPOS_REGISTRO,
+} from "../constants/solicitudes.constants";
+
+type SolicitudForm = {
+  nombre: string;
+  primer_apellido: string;
+  segundo_apellido: string;
+  nombre_usuario: string;
+  correo: string;
+  telefono: string;
+  extension: string;
+  celular: string;
+  perfil: string;
+  estatus: string;
+  ambito: string;
+  estado: string;
+  municipio: string;
+  area_adscripcion: string;
+  atendido_por: string;
+  observaciones: string;
+  tipo_registro: string;
+};
+
+const INITIAL_FORM: SolicitudForm = {
+  nombre: "",
+  primer_apellido: "",
+  segundo_apellido: "",
+  nombre_usuario: "",
+  correo: "",
+  telefono: "",
+  extension: "",
+  celular: "",
+  perfil: "",
+  estatus: "",
+  ambito: "",
+  estado: "",
+  municipio: "",
+  area_adscripcion: "",
+  atendido_por: "",
+  observaciones: "",
+  tipo_registro: "",
+};
+
+const REQUIRED_FIELDS: Array<keyof SolicitudForm> = [
+  "nombre",
+  "primer_apellido",
+  "segundo_apellido",
+  "nombre_usuario",
+  "correo",
+  "perfil",
+  "estatus",
+  "ambito",
+  "estado",
+  "area_adscripcion",
+  "atendido_por",
+  "tipo_registro",
+];
+
+const FIELD_LABELS: Record<keyof SolicitudForm, string> = {
+  nombre: "Nombre",
+  primer_apellido: "Primer apellido",
+  segundo_apellido: "Segundo apellido",
+  nombre_usuario: "Nombre de usuario",
+  correo: "Correo",
+  telefono: "TelÃ©fono",
+  extension: "ExtensiÃ³n",
+  celular: "Celular",
+  perfil: "Perfil",
+  estatus: "Estatus",
+  ambito: "Ãmbito",
+  estado: "Estado",
+  municipio: "Municipio",
+  area_adscripcion: "Ãrea adscripciÃ³n",
+  atendido_por: "Atendido por",
+  observaciones: "Observaciones",
+  tipo_registro: "Tipo de registro",
+};
+
+export default function SolicitudRegistrarPage() {
+  const navigate = useNavigate();
+
+  const [saving, setSaving] = useState(false);
+  const [okMsg, setOkMsg] = useState("");
+  const [errMsg, setErrMsg] = useState("");
+  const [triedSubmit, setTriedSubmit] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
+  const [form, setForm] = useState<SolicitudForm>(INITIAL_FORM);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const formIsDirty = useMemo(() => {
+    const anyValue = Object.values(form).some((value) => value.trim().length > 0);
+    return anyValue || files.length > 0;
+  }, [form, files]);
+
+  function safeNavigateHome() {
+    navigate("/app", { replace: false });
+  }
+
+  function onChange<K extends keyof SolicitudForm>(key: K, value: SolicitudForm[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function validate() {
+    const missing = REQUIRED_FIELDS.filter((key) => !form[key].trim());
+
+    if (missing.length > 0) {
+      const missingLabels = missing.map((key) => FIELD_LABELS[key]);
+      setErrMsg(`Revisa campos requeridos: ${missingLabels.join(", ")}`);
+      setOkMsg("");
+      return false;
+    }
+
+    setErrMsg("");
+    return true;
+  }
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setShowConfirm(false);
+      }
+    }
+
+    document.addEventListener("keydown", onKey);
+
+    if (showConfirm) {
+      const previousOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+
+      return () => {
+        document.removeEventListener("keydown", onKey);
+        document.body.style.overflow = previousOverflow;
+      };
+    }
+
+    return () => document.removeEventListener("keydown", onKey);
+  }, [showConfirm]);
+
+  function onCancelClick() {
+    if (formIsDirty) {
+      setShowConfirm(true);
+      return;
+    }
+
+    safeNavigateHome();
+  }
+
+  function confirmLeave() {
+    setShowConfirm(false);
+    safeNavigateHome();
+  }
+
+  function onSaveDraftClick() {
+    setOkMsg("Borrador guardado (preview).");
+    setErrMsg("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+
+    if (!validate()) {
+      setTriedSubmit(true);
+      return;
+    }
+
+    setTriedSubmit(false);
+    setSaving(true);
+    setOkMsg("");
+    setErrMsg("");
+
+    setTimeout(() => {
+      setSaving(false);
+      setOkMsg("Solicitud (preview) validada. Lista para conectar a API.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+
+      setForm(INITIAL_FORM);
+      setFiles([]);
+    }, 700);
+  }
+
+  return (
+    <div className="min-h-screen bg-[#F6F7F9] text-slate-800">
+      <PageHeader
+        breadcrumb="Solicitudes â€º Registrar"
+        title="Registrar solicitud"
+      />
+
+      <form onSubmit={onSubmit} className="mx-auto max-w-[1200px] px-6 pb-28">
+        {okMsg && (
+          <div className="mb-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-800">
+            <CheckCircle2 className="mt-0.5 h-5 w-5" />
+            <div>{okMsg}</div>
+          </div>
+        )}
+
+        {errMsg && (
+          <div className="mb-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-rose-700">
+            <AlertCircle className="mt-0.5 h-5 w-5" />
+            <div>{errMsg}</div>
+          </div>
+        )}
+
+        <CardSection title="Datos de la persona">
+          <div className="grid grid-cols-12 gap-4">
+            <TextField
+              label="Nombre *"
+              value={form.nombre}
+              onChange={(v) => onChange("nombre", v)}
+              className="col-span-12 md:col-span-4"
+              placeholder="Nombre"
+            />
+
+            <TextField
+              label="Primer apellido *"
+              value={form.primer_apellido}
+              onChange={(v) => onChange("primer_apellido", v)}
+              className="col-span-12 md:col-span-4"
+              placeholder="Primer apellido"
+            />
+
+            <TextField
+              label="Segundo apellido *"
+              value={form.segundo_apellido}
+              onChange={(v) => onChange("segundo_apellido", v)}
+              className="col-span-12 md:col-span-4"
+              placeholder="Segundo apellido"
+            />
+
+            <TextField
+              label="Nombre de usuario *"
+              value={form.nombre_usuario}
+              onChange={(v) => onChange("nombre_usuario", v)}
+              className="col-span-12 md:col-span-4"
+              placeholder="nombre.apellido"
+            />
+
+            <TextField
+              label="Correo *"
+              type="email"
+              value={form.correo}
+              onChange={(v) => onChange("correo", v)}
+              className="col-span-12 md:col-span-4"
+              placeholder="correo@dominio"
+              icon={<Mail className="h-4 w-4 text-slate-400" />}
+            />
+
+            <TextField
+              label="TelÃ©fono"
+              value={form.telefono}
+              onChange={(v) => onChange("telefono", v)}
+              className="col-span-12 md:col-span-4"
+              placeholder="+52 ___ ___ ____"
+            />
+
+            <TextField
+              label="ExtensiÃ³n"
+              value={form.extension}
+              onChange={(v) => onChange("extension", v)}
+              className="col-span-12 md:col-span-4"
+              placeholder="EXT"
+            />
+
+            <TextField
+              label="Celular"
+              value={form.celular}
+              onChange={(v) => onChange("celular", v)}
+              className="col-span-12 md:col-span-4"
+              placeholder="CELULAR"
+            />
+
+            <SelectField
+              label="Perfil *"
+              value={form.perfil}
+              onChange={(v) => onChange("perfil", v)}
+              options={PERFIL_SOL}
+              className="col-span-12 md:col-span-4"
+              placeholder="Seleccionaâ€¦"
+              error={triedSubmit && !form.perfil}
+            />
+          </div>
+        </CardSection>
+
+        <CardSection title="UbicaciÃ³n / InstituciÃ³n">
+          <div className="grid grid-cols-12 gap-4">
+            <SelectField
+              label="Estatus *"
+              value={form.estatus}
+              onChange={(v) => onChange("estatus", v)}
+              options={ESTATUS_SOL}
+              className="col-span-12 md:col-span-4"
+              placeholder="Seleccionaâ€¦"
+              error={triedSubmit && !form.estatus}
+            />
+
+            <SelectField
+              label="Ãmbito *"
+              value={form.ambito}
+              onChange={(v) => onChange("ambito", v)}
+              options={AMBITO_SOL}
+              className="col-span-12 md:col-span-4"
+              placeholder="Seleccionaâ€¦"
+              error={triedSubmit && !form.ambito}
+            />
+
+            <SelectField
+              label="Estado *"
+              value={form.estado}
+              onChange={(v) => onChange("estado", v)}
+              options={ESTADOS_MX}
+              className="col-span-12 md:col-span-4"
+              placeholder="Seleccionaâ€¦"
+              error={triedSubmit && !form.estado}
+            />
+
+            <SelectField
+              label="Municipio"
+              value={form.municipio}
+              onChange={(v) => onChange("municipio", v)}
+              options={MUNICIPIOS_SOL}
+              className="col-span-12 md:col-span-4"
+              placeholder="Seleccionaâ€¦"
+            />
+
+            <TextField
+              label="Ãrea adscripciÃ³n *"
+              value={form.area_adscripcion}
+              onChange={(v) => onChange("area_adscripcion", v)}
+              className="col-span-12 md:col-span-4"
+              placeholder="Nombre del Ã¡rea / adscripciÃ³n"
+            />
+
+            <TextField
+              label="Atendido por *"
+              value={form.atendido_por}
+              onChange={(v) => onChange("atendido_por", v)}
+              className="col-span-12 md:col-span-4"
+              placeholder="Nombre de la persona que atiende"
+            />
+          </div>
+        </CardSection>
+
+        <CardSection title="Detalles de la solicitud">
+          <div className="grid grid-cols-12 gap-4">
+            <TextAreaField
+              label="Observaciones"
+              value={form.observaciones}
+              onChange={(v) => onChange("observaciones", v)}
+              className="col-span-12 md:col-span-8"
+              placeholder="Observacionesâ€¦"
+              maxLength={1500}
+            />
+
+            <SelectField
+              label="Tipo de registro *"
+              value={form.tipo_registro}
+              onChange={(v) => onChange("tipo_registro", v)}
+              options={TIPOS_REGISTRO}
+              className="col-span-12 md:col-span-4"
+              placeholder="Seleccionaâ€¦"
+              error={triedSubmit && !form.tipo_registro}
+            />
+          </div>
+        </CardSection>
+
+        <CardSection title="Archivos">
+          <FileUploadField
+            label="Adjuntos (.pdf, .docx, .xlsx, .csv, .jpg, .png)"
+            files={files}
+            onChange={setFiles}
+            helperText="Hasta 10MB por archivo"
+            buttonText="Elegir archivos"
+          />
+        </CardSection>
+
+        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200/80 bg-white/90 shadow-[0_-4px_12px_rgba(2,6,23,0.06)] backdrop-blur supports-[backdrop-filter]:bg-white/75">
+          <div className="mx-auto flex max-w-[1200px] items-center justify-end gap-3 px-6 py-3">
+            <button
+              type="button"
+              onClick={onCancelClick}
+              disabled={showConfirm}
+              className="rounded-xl px-3 py-2 text-[14px] text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+
+            <button
+              type="button"
+              onClick={onSaveDraftClick}
+              disabled={showConfirm}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-[14px] shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Guardar borrador
+            </button>
+
+            <button
+              type="submit"
+              disabled={saving || showConfirm}
+              className="rounded-xl bg-slate-900 px-5 py-2.5 text-[14px] text-white shadow-md transition-colors hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:opacity-60"
+            >
+              {saving ? "Guardandoâ€¦" : "Guardar"}
+            </button>
+          </div>
+        </div>
+      </form>
+
+      <ConfirmDialog
+        open={showConfirm}
+        title="Â¿Salir sin guardar?"
+        message="Los cambios no guardados se perderÃ¡n."
+        onCancel={() => setShowConfirm(false)}
+        onConfirm={confirmLeave}
+        cancelText="Seguir editando"
+        confirmText="Salir sin guardar"
+        confirmVariant="danger"
+      />
+
+      <div className="mx-auto flex max-w-[1200px] items-start gap-2 px-6 py-8 text-sm text-slate-500">
+        <Info className="mt-1 h-4 w-4" />
+        <p>
+          Vista previa del formulario. Al conectar API, este submit enviarÃ¡ JSON
+          + archivos por multipart/form-data.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+
+================================================================================
+ARCHIVO: src/modules/solicitudes/pages/SolicitudSeguimientoPage.tsx
+================================================================================
+
+import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+
+import PageHeader from "../../../components/ui/PageHeader";
+import ConfirmDialog from "../../../components/ui/ConfirmDialog";
+
+import SolicitudFilters from "../components/SolicitudFilters";
+import SolicitudTable from "../components/SolicitudTable";
+import SolicitudDrawer from "../components/SolicitudDrawer";
+
+import { MOCK_SOLICITUDES } from "../constants/solicitudes.constants";
+import type {
+  EstatusSolicitud,
+  SolicitudRow,
+  TipoRegistroSolicitud,
+} from "../types/solicitudes.types";
+
+const DEFAULT_PAGE_SIZE = 5;
+const SORT_BY: keyof SolicitudRow = "fecha";
+const SORT_DIR: "asc" | "desc" = "desc";
+
+export default function SolicitudSeguimientoPage() {
+  const [data, setData] = useState<SolicitudRow[]>(MOCK_SOLICITUDES);
+
+  const [q, setQ] = useState("");
+  const [estado, setEstado] = useState("");
+  const [estatus, setEstatus] = useState<EstatusSolicitud | "">("");
+  const [tipo, setTipo] = useState("");
+  const [tipoRegistro, setTipoRegistro] = useState<TipoRegistroSolicitud | "">(
+    ""
+  );
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
+
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+
+  const [editRow, setEditRow] = useState<SolicitudRow | null>(null);
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [toDelete, setToDelete] = useState<SolicitudRow | null>(null);
+
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPage(1);
+  }, [q, estado, estatus, tipo, tipoRegistro, desde, hasta, pageSize]);
+
+  useEffect(() => {
+    if (!toast) return;
+
+    const timer = window.setTimeout(() => {
+      setToast(null);
+    }, 1600);
+
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  const filtered = useMemo(() => {
+    let list = [...data];
+    const qq = q.trim().toLowerCase();
+
+    if (qq) {
+      list = list.filter(
+        (row) =>
+          row.folio.toLowerCase().includes(qq) ||
+          row.nombre.toLowerCase().includes(qq) ||
+          row.estado.toLowerCase().includes(qq) ||
+          row.tipo.toLowerCase().includes(qq) ||
+          row.registro.toLowerCase().includes(qq) ||
+          row.estatus.toLowerCase().includes(qq)
+      );
+    }
+
+    if (estado) {
+      list = list.filter((row) => row.estado === estado);
+    }
+
+    if (estatus) {
+      list = list.filter((row) => row.estatus === estatus);
+    }
+
+    if (tipo) {
+      list = list.filter((row) => row.tipo === tipo);
+    }
+
+    if (tipoRegistro) {
+      list = list.filter((row) => row.registro === tipoRegistro);
+    }
+
+    if (desde) {
+      list = list.filter((row) => row.fecha >= desde);
+    }
+
+    if (hasta) {
+      list = list.filter((row) => row.fecha <= hasta);
+    }
+
+    list.sort((a, b) => {
+      const valueA = a[SORT_BY] as string;
+      const valueB = b[SORT_BY] as string;
+
+      if (valueA < valueB) return SORT_DIR === "asc" ? -1 : 1;
+      if (valueA > valueB) return SORT_DIR === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return list;
+  }, [data, q, estado, estatus, tipo, tipoRegistro, desde, hasta]);
+
+  const total = filtered.length;
+  const maxPage = Math.max(1, Math.ceil(total / pageSize));
+
+  useEffect(() => {
+    setPage((prev) => Math.min(prev, maxPage));
+  }, [maxPage]);
+
+  const pageData = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    const end = page * pageSize;
+    return filtered.slice(start, end);
+  }, [filtered, page, pageSize]);
+
+  const pageStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const pageEnd = total === 0 ? 0 : pageStart + pageData.length - 1;
+
+  function showToastMessage(message: string) {
+    setToast(message);
+  }
+
+  function closeDrawer() {
+    setEditRow(null);
+  }
+
+  function handleEdit(row: SolicitudRow) {
+    setEditRow(row);
+  }
+
+  function handleDeleteRequest(row: SolicitudRow) {
+    setToDelete(row);
+    setConfirmOpen(true);
+  }
+
+  function handleDeleteConfirm() {
+    if (!toDelete) return;
+
+    setData((prev) => prev.filter((row) => row.folio !== toDelete.folio));
+    setConfirmOpen(false);
+    setToDelete(null);
+    showToastMessage("Solicitud eliminada");
+  }
+
+  function handleUpdatedSolicitud(updated: SolicitudRow) {
+    setData((prev) =>
+      prev.map((row) => (row.folio === updated.folio ? updated : row))
+    );
+
+    closeDrawer();
+    showToastMessage("Solicitud actualizada");
+  }
+
+  function handleClearFilters() {
+    setQ("");
+    setEstado("");
+    setEstatus("");
+    setTipo("");
+    setTipoRegistro("");
+    setDesde("");
+    setHasta("");
+  }
+
+  return (
+    <div className="min-h-screen bg-[#F6F7F9] text-slate-800">
+      <PageHeader
+        breadcrumb="Solicitudes â€º Seguimiento"
+        title="Seguimiento de Solicitudes"
+      />
+
+      <div className="mx-auto max-w-[1200px] px-6 pb-20">
+        <SolicitudFilters
+          q={q}
+          onQChange={setQ}
+          estado={estado}
+          onEstadoChange={setEstado}
+          estatus={estatus}
+          onEstatusChange={setEstatus}
+          tipo={tipo}
+          onTipoChange={setTipo}
+          tipoRegistro={tipoRegistro}
+          onTipoRegistroChange={setTipoRegistro}
+          desde={desde}
+          onDesdeChange={setDesde}
+          hasta={hasta}
+          onHastaChange={setHasta}
+          onClear={handleClearFilters}
+          onApply={() => setPage(1)}
+        />
+
+        <SolicitudTable
+          rows={pageData}
+          onEdit={handleEdit}
+          onDelete={handleDeleteRequest}
+        />
+
+        <div className="mt-3 flex flex-col items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-[13px] text-slate-600 md:flex-row">
+          <div>
+            Mostrando{" "}
+            <span className="font-medium text-slate-800">
+              {pageStart}â€“{pageEnd}
+            </span>{" "}
+            de <span className="font-medium text-slate-800">{total}</span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(1);
+              }}
+              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[13px]"
+            >
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+            </select>
+
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                disabled={page === 1}
+                className="rounded-md border border-slate-200 p-1 disabled:opacity-50"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+
+              <span className="px-2">
+                {page} / {maxPage}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setPage((prev) => Math.min(maxPage, prev + 1))}
+                disabled={page === maxPage}
+                className="rounded-md border border-slate-200 p-1 disabled:opacity-50"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {editRow && (
+        <SolicitudDrawer
+          row={editRow}
+          onClose={closeDrawer}
+          onSave={handleUpdatedSolicitud}
+        />
+      )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Eliminar solicitud"
+        message={
+          toDelete
+            ? `Â¿Seguro que deseas eliminar la solicitud ${toDelete.folio} â€“ ${toDelete.nombre}? Esta acciÃ³n no se puede deshacer.`
+            : ""
+        }
+        onCancel={() => {
+          setConfirmOpen(false);
+          setToDelete(null);
+        }}
+        onConfirm={handleDeleteConfirm}
+        cancelText="Cancelar"
+        confirmText="Eliminar"
+        confirmVariant="danger"
+      />
+
+      {toast && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-slate-900 px-4 py-2 text-sm text-white shadow-lg">
+          {toast}
+        </div>
+      )}
+    </div>
+  );
+}
+
+

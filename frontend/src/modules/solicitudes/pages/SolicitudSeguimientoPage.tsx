@@ -1,5 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 
 import PageHeader from "../../../components/ui/PageHeader";
 import ConfirmDialog from "../../../components/ui/ConfirmDialog";
@@ -15,125 +24,215 @@ import type {
   TipoRegistroSolicitud,
 } from "../types/solicitudes.types";
 
+type FiltersState = {
+  q: string;
+  estado: string;
+  estatus: EstatusSolicitud | "";
+  tipo: string;
+  tipoRegistro: TipoRegistroSolicitud | "";
+  desde: string;
+  hasta: string;
+};
+
+type FiltersAction =
+  | {
+      type: "set";
+      key: keyof FiltersState;
+      value: string;
+    }
+  | {
+      type: "clear";
+    };
+
 const DEFAULT_PAGE_SIZE = 5;
 const SORT_BY: keyof SolicitudRow = "fecha";
-const SORT_DIR: "asc" | "desc" = "desc";
+const SORT_DIRECTION: "asc" | "desc" = "desc";
+
+const INITIAL_FILTERS: FiltersState = {
+  q: "",
+  estado: "",
+  estatus: "",
+  tipo: "",
+  tipoRegistro: "",
+  desde: "",
+  hasta: "",
+};
+
+function filtersReducer(
+  state: FiltersState,
+  action: FiltersAction,
+): FiltersState {
+  if (action.type === "clear") {
+    return INITIAL_FILTERS;
+  }
+
+  return {
+    ...state,
+    [action.key]: action.value,
+  } as FiltersState;
+}
+
+function filterAndSortSolicitudes(
+  rows: SolicitudRow[],
+  filters: FiltersState,
+) {
+  let result = [...rows];
+  const query = filters.q.trim().toLowerCase();
+
+  if (query) {
+    result = result.filter(
+      (row) =>
+        row.folio.toLowerCase().includes(query) ||
+        row.nombre.toLowerCase().includes(query) ||
+        row.estado.toLowerCase().includes(query) ||
+        row.tipo.toLowerCase().includes(query) ||
+        row.registro.toLowerCase().includes(query) ||
+        row.estatus.toLowerCase().includes(query),
+    );
+  }
+
+  if (filters.estado) {
+    result = result.filter(
+      (row) => row.estado === filters.estado,
+    );
+  }
+
+  if (filters.estatus) {
+    result = result.filter(
+      (row) => row.estatus === filters.estatus,
+    );
+  }
+
+  if (filters.tipo) {
+    result = result.filter(
+      (row) => row.tipo === filters.tipo,
+    );
+  }
+
+  if (filters.tipoRegistro) {
+    result = result.filter(
+      (row) =>
+        row.registro === filters.tipoRegistro,
+    );
+  }
+
+  if (filters.desde) {
+    result = result.filter(
+      (row) => row.fecha >= filters.desde,
+    );
+  }
+
+  if (filters.hasta) {
+    result = result.filter(
+      (row) => row.fecha <= filters.hasta,
+    );
+  }
+
+  result.sort((first, second) => {
+    const firstValue = String(first[SORT_BY]);
+    const secondValue = String(second[SORT_BY]);
+
+    if (firstValue < secondValue) {
+      return SORT_DIRECTION === "asc" ? -1 : 1;
+    }
+
+    if (firstValue > secondValue) {
+      return SORT_DIRECTION === "asc" ? 1 : -1;
+    }
+
+    return 0;
+  });
+
+  return result;
+}
 
 export default function SolicitudSeguimientoPage() {
-  const [data, setData] = useState<SolicitudRow[]>(MOCK_SOLICITUDES);
-
-  const [q, setQ] = useState("");
-  const [estado, setEstado] = useState("");
-  const [estatus, setEstatus] = useState<EstatusSolicitud | "">("");
-  const [tipo, setTipo] = useState("");
-  const [tipoRegistro, setTipoRegistro] = useState<TipoRegistroSolicitud | "">(
-    ""
+  const [data, setData] = useState<SolicitudRow[]>(
+    MOCK_SOLICITUDES,
   );
-  const [desde, setDesde] = useState("");
-  const [hasta, setHasta] = useState("");
+
+  const [filters, dispatchFilters] = useReducer(
+    filtersReducer,
+    INITIAL_FILTERS,
+  );
 
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [pageSize, setPageSize] = useState(
+    DEFAULT_PAGE_SIZE,
+  );
 
-  const [editRow, setEditRow] = useState<SolicitudRow | null>(null);
-
+  const [editRow, setEditRow] =
+    useState<SolicitudRow | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [toDelete, setToDelete] = useState<SolicitudRow | null>(null);
-
+  const [toDelete, setToDelete] =
+    useState<SolicitudRow | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  useEffect(() => {
-    setPage(1);
-  }, [q, estado, estatus, tipo, tipoRegistro, desde, hasta, pageSize]);
+  const toastTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!toast) return;
+    return () => {
+      if (toastTimerRef.current !== null) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+    };
+  }, []);
 
-    const timer = window.setTimeout(() => {
-      setToast(null);
-    }, 1600);
-
-    return () => window.clearTimeout(timer);
-  }, [toast]);
-
-  const filtered = useMemo(() => {
-    let list = [...data];
-    const qq = q.trim().toLowerCase();
-
-    if (qq) {
-      list = list.filter(
-        (row) =>
-          row.folio.toLowerCase().includes(qq) ||
-          row.nombre.toLowerCase().includes(qq) ||
-          row.estado.toLowerCase().includes(qq) ||
-          row.tipo.toLowerCase().includes(qq) ||
-          row.registro.toLowerCase().includes(qq) ||
-          row.estatus.toLowerCase().includes(qq)
-      );
-    }
-
-    if (estado) {
-      list = list.filter((row) => row.estado === estado);
-    }
-
-    if (estatus) {
-      list = list.filter((row) => row.estatus === estatus);
-    }
-
-    if (tipo) {
-      list = list.filter((row) => row.tipo === tipo);
-    }
-
-    if (tipoRegistro) {
-      list = list.filter((row) => row.registro === tipoRegistro);
-    }
-
-    if (desde) {
-      list = list.filter((row) => row.fecha >= desde);
-    }
-
-    if (hasta) {
-      list = list.filter((row) => row.fecha <= hasta);
-    }
-
-    list.sort((a, b) => {
-      const valueA = a[SORT_BY] as string;
-      const valueB = b[SORT_BY] as string;
-
-      if (valueA < valueB) return SORT_DIR === "asc" ? -1 : 1;
-      if (valueA > valueB) return SORT_DIR === "asc" ? 1 : -1;
-      return 0;
-    });
-
-    return list;
-  }, [data, q, estado, estatus, tipo, tipoRegistro, desde, hasta]);
+  const filtered = useMemo(
+    () => filterAndSortSolicitudes(data, filters),
+    [data, filters],
+  );
 
   const total = filtered.length;
-  const maxPage = Math.max(1, Math.ceil(total / pageSize));
-
-  useEffect(() => {
-    setPage((prev) => Math.min(prev, maxPage));
-  }, [maxPage]);
+  const maxPage = Math.max(
+    1,
+    Math.ceil(total / pageSize),
+  );
+  const safePage = Math.min(page, maxPage);
 
   const pageData = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    const end = page * pageSize;
-    return filtered.slice(start, end);
-  }, [filtered, page, pageSize]);
+    const start = (safePage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, safePage, pageSize]);
 
-  const pageStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
-  const pageEnd = total === 0 ? 0 : pageStart + pageData.length - 1;
+  const pageStart =
+    total === 0
+      ? 0
+      : (safePage - 1) * pageSize + 1;
+
+  const pageEnd =
+    total === 0
+      ? 0
+      : pageStart + pageData.length - 1;
 
   function showToastMessage(message: string) {
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+
     setToast(message);
+
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, 1600);
   }
 
-  function closeDrawer() {
-    setEditRow(null);
+  function updateFilter(
+    key: keyof FiltersState,
+    value: string,
+  ) {
+    dispatchFilters({
+      type: "set",
+      key,
+      value,
+    });
+    setPage(1);
   }
 
-  function handleEdit(row: SolicitudRow) {
-    setEditRow(row);
+  function clearFilters() {
+    dispatchFilters({ type: "clear" });
+    setPage(1);
   }
 
   function handleDeleteRequest(row: SolicitudRow) {
@@ -142,31 +241,43 @@ export default function SolicitudSeguimientoPage() {
   }
 
   function handleDeleteConfirm() {
-    if (!toDelete) return;
+    if (!toDelete) {
+      return;
+    }
 
-    setData((prev) => prev.filter((row) => row.folio !== toDelete.folio));
+    setData((currentRows) =>
+      currentRows.filter(
+        (row) => row.folio !== toDelete.folio,
+      ),
+    );
+
+    const remaining = Math.max(0, total - 1);
+    const nextMaxPage = Math.max(
+      1,
+      Math.ceil(remaining / pageSize),
+    );
+
+    setPage((currentPage) =>
+      Math.min(currentPage, nextMaxPage),
+    );
     setConfirmOpen(false);
     setToDelete(null);
     showToastMessage("Solicitud eliminada");
   }
 
-  function handleUpdatedSolicitud(updated: SolicitudRow) {
-    setData((prev) =>
-      prev.map((row) => (row.folio === updated.folio ? updated : row))
+  function handleUpdatedSolicitud(
+    updated: SolicitudRow,
+  ) {
+    setData((currentRows) =>
+      currentRows.map((row) =>
+        row.folio === updated.folio
+          ? updated
+          : row,
+      ),
     );
 
-    closeDrawer();
+    setEditRow(null);
     showToastMessage("Solicitud actualizada");
-  }
-
-  function handleClearFilters() {
-    setQ("");
-    setEstado("");
-    setEstatus("");
-    setTipo("");
-    setTipoRegistro("");
-    setDesde("");
-    setHasta("");
   }
 
   return (
@@ -178,27 +289,41 @@ export default function SolicitudSeguimientoPage() {
 
       <div className="mx-auto max-w-[1200px] px-6 pb-20">
         <SolicitudFilters
-          q={q}
-          onQChange={setQ}
-          estado={estado}
-          onEstadoChange={setEstado}
-          estatus={estatus}
-          onEstatusChange={setEstatus}
-          tipo={tipo}
-          onTipoChange={setTipo}
-          tipoRegistro={tipoRegistro}
-          onTipoRegistroChange={setTipoRegistro}
-          desde={desde}
-          onDesdeChange={setDesde}
-          hasta={hasta}
-          onHastaChange={setHasta}
-          onClear={handleClearFilters}
+          q={filters.q}
+          onQChange={(value) =>
+            updateFilter("q", value)
+          }
+          estado={filters.estado}
+          onEstadoChange={(value) =>
+            updateFilter("estado", value)
+          }
+          estatus={filters.estatus}
+          onEstatusChange={(value) =>
+            updateFilter("estatus", value)
+          }
+          tipo={filters.tipo}
+          onTipoChange={(value) =>
+            updateFilter("tipo", value)
+          }
+          tipoRegistro={filters.tipoRegistro}
+          onTipoRegistroChange={(value) =>
+            updateFilter("tipoRegistro", value)
+          }
+          desde={filters.desde}
+          onDesdeChange={(value) =>
+            updateFilter("desde", value)
+          }
+          hasta={filters.hasta}
+          onHastaChange={(value) =>
+            updateFilter("hasta", value)
+          }
+          onClear={clearFilters}
           onApply={() => setPage(1)}
         />
 
         <SolicitudTable
           rows={pageData}
-          onEdit={handleEdit}
+          onEdit={setEditRow}
           onDelete={handleDeleteRequest}
         />
 
@@ -208,14 +333,27 @@ export default function SolicitudSeguimientoPage() {
             <span className="font-medium text-slate-800">
               {pageStart}–{pageEnd}
             </span>{" "}
-            de <span className="font-medium text-slate-800">{total}</span>
+            de{" "}
+            <span className="font-medium text-slate-800">
+              {total}
+            </span>
           </div>
 
           <div className="flex items-center gap-3">
+            <label
+              htmlFor="solicitudes-page-size"
+              className="sr-only"
+            >
+              Solicitudes por página
+            </label>
+
             <select
+              id="solicitudes-page-size"
               value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
+              onChange={(event) => {
+                setPageSize(
+                  Number(event.target.value),
+                );
                 setPage(1);
               }}
               className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[13px]"
@@ -228,24 +366,43 @@ export default function SolicitudSeguimientoPage() {
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                disabled={page === 1}
+                aria-label="Página anterior"
+                onClick={() =>
+                  setPage((currentPage) =>
+                    Math.max(1, currentPage - 1),
+                  )
+                }
+                disabled={safePage === 1}
                 className="rounded-md border border-slate-200 p-1 disabled:opacity-50"
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft
+                  aria-hidden="true"
+                  className="h-4 w-4"
+                />
               </button>
 
-              <span className="px-2">
-                {page} / {maxPage}
+              <span className="px-2" aria-live="polite">
+                {safePage} / {maxPage}
               </span>
 
               <button
                 type="button"
-                onClick={() => setPage((prev) => Math.min(maxPage, prev + 1))}
-                disabled={page === maxPage}
+                aria-label="Página siguiente"
+                onClick={() =>
+                  setPage((currentPage) =>
+                    Math.min(
+                      maxPage,
+                      currentPage + 1,
+                    ),
+                  )
+                }
+                disabled={safePage === maxPage}
                 className="rounded-md border border-slate-200 p-1 disabled:opacity-50"
               >
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight
+                  aria-hidden="true"
+                  className="h-4 w-4"
+                />
               </button>
             </div>
           </div>
@@ -255,7 +412,7 @@ export default function SolicitudSeguimientoPage() {
       {editRow && (
         <SolicitudDrawer
           row={editRow}
-          onClose={closeDrawer}
+          onClose={() => setEditRow(null)}
           onSave={handleUpdatedSolicitud}
         />
       )}
@@ -279,7 +436,10 @@ export default function SolicitudSeguimientoPage() {
       />
 
       {toast && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-slate-900 px-4 py-2 text-sm text-white shadow-lg">
+        <div
+          role="status"
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-slate-900 px-4 py-2 text-sm text-white shadow-lg"
+        >
           {toast}
         </div>
       )}

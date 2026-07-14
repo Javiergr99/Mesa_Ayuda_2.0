@@ -1,5 +1,15 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Clock } from "lucide-react";
+
+const HOURS = Array.from(
+  { length: 24 },
+  (_, index) => String(index).padStart(2, "0"),
+);
+
+const MINUTES = Array.from(
+  { length: 60 },
+  (_, index) => String(index).padStart(2, "0"),
+);
 
 type TimeFieldProps = {
   label: string;
@@ -18,50 +28,73 @@ export default function TimeField({
   placeholder = "hh:mm",
   error = false,
 }: TimeFieldProps) {
+  const triggerId = useId();
+  const panelId = useId();
+  const hoursLabelId = useId();
+  const minutesLabelId = useId();
+  const errorId = `${triggerId}-error`;
+
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement | null>(null);
+
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    function onDoc(e: MouseEvent) {
-      if (!ref.current) return;
-      if (!ref.current.contains(e.target as Node)) setOpen(false);
+    function handleDocumentMouseDown(event: MouseEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setOpen(false);
+      }
     }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+
+    document.addEventListener("mousedown", handleDocumentMouseDown);
+
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        handleDocumentMouseDown,
+      );
+    };
   }, []);
 
-  const [h, m] = (value || "").split(":");
-  const hour = isNaN(Number(h)) ? "" : String(Number(h)).padStart(2, "0");
-  const minute = isNaN(Number(m)) ? "" : String(Number(m)).padStart(2, "0");
+  const [rawHour, rawMinute] = (value || "").split(":");
 
-  const hours = useMemo(
-    () => Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")),
-    []
-  );
+  const hour = Number.isNaN(Number(rawHour))
+    ? ""
+    : String(Number(rawHour)).padStart(2, "0");
 
-  const mins = useMemo(
-    () => Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0")),
-    []
-  );
-
-  function setHour(v: string) {
-    onChange(`${v}:${minute || "00"}`);
-  }
-
-  function setMin(v: string) {
-    onChange(`${hour || "00"}:${v}`);
-  }
+  const minute = Number.isNaN(Number(rawMinute))
+    ? ""
+    : String(Number(rawMinute)).padStart(2, "0");
 
   const display = value ? `${hour}:${minute}` : "";
 
+  function setHour(nextHour: string) {
+    onChange(`${nextHour}:${minute || "00"}`);
+  }
+
+  function setMinute(nextMinute: string) {
+    onChange(`${hour || "00"}:${nextMinute}`);
+  }
+
   return (
-    <div className={className} ref={ref}>
-      <label className="block text-[13px] text-slate-600 mb-1">{label}</label>
+    <div className={className} ref={containerRef}>
+      <label
+        htmlFor={triggerId}
+        className="mb-1 block text-[13px] text-slate-600"
+      >
+        {label}
+      </label>
 
       <button
+        id={triggerId}
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={`w-full rounded-lg border bg-white px-3 py-2 text-left text-[14px] hover:bg-slate-50 focus:outline-none focus:ring-2 flex items-center justify-between ${
+        aria-controls={open ? panelId : undefined}
+        aria-expanded={open}
+        aria-describedby={error ? errorId : undefined}
+        onClick={() => setOpen((current) => !current)}
+        className={`flex w-full items-center justify-between rounded-lg border bg-white px-3 py-2 text-left text-[14px] hover:bg-slate-50 focus:outline-none focus:ring-2 ${
           error
             ? "border-rose-400 focus:ring-rose-200"
             : "border-slate-300 focus:ring-slate-300"
@@ -70,50 +103,79 @@ export default function TimeField({
         <span className={`truncate ${!value ? "text-slate-400" : ""}`}>
           {display || placeholder}
         </span>
-        <Clock className="h-4 w-4 text-slate-400" />
+
+        <Clock
+          aria-hidden="true"
+          className="h-4 w-4 text-slate-400"
+        />
       </button>
 
       {error && (
-        <div className="mt-1 text-[12px] text-rose-600">
+        <div
+          id={errorId}
+          role="alert"
+          className="mt-1 text-[12px] text-rose-600"
+        >
           Selecciona una hora.
         </div>
       )}
 
       {open && (
         <div className="relative z-20">
-          <div className="absolute mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+          <div
+            id={panelId}
+            className="absolute mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 shadow-xl"
+          >
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <div className="mb-1 text-[12px] text-slate-500">Horas</div>
+              <div role="group" aria-labelledby={hoursLabelId}>
+                <div
+                  id={hoursLabelId}
+                  className="mb-1 text-[12px] text-slate-500"
+                >
+                  Horas
+                </div>
+
                 <div className="h-40 overflow-auto rounded-md border border-slate-100">
-                  {hours.map((v) => (
+                  {HOURS.map((option) => (
                     <button
-                      key={v}
+                      key={option}
                       type="button"
-                      onClick={() => setHour(v)}
+                      aria-pressed={option === hour}
+                      onClick={() => setHour(option)}
                       className={`block w-full px-3 py-2 text-left text-[14px] hover:bg-slate-50 ${
-                        v === hour ? "bg-slate-900 text-white" : ""
+                        option === hour
+                          ? "bg-slate-900 text-white"
+                          : ""
                       }`}
                     >
-                      {v}
+                      {option}
                     </button>
                   ))}
                 </div>
               </div>
 
-              <div>
-                <div className="mb-1 text-[12px] text-slate-500">Minutos</div>
+              <div role="group" aria-labelledby={minutesLabelId}>
+                <div
+                  id={minutesLabelId}
+                  className="mb-1 text-[12px] text-slate-500"
+                >
+                  Minutos
+                </div>
+
                 <div className="h-40 overflow-auto rounded-md border border-slate-100">
-                  {mins.map((v) => (
+                  {MINUTES.map((option) => (
                     <button
-                      key={v}
+                      key={option}
                       type="button"
-                      onClick={() => setMin(v)}
+                      aria-pressed={option === minute}
+                      onClick={() => setMinute(option)}
                       className={`block w-full px-3 py-2 text-left text-[14px] hover:bg-slate-50 ${
-                        v === minute ? "bg-slate-900 text-white" : ""
+                        option === minute
+                          ? "bg-slate-900 text-white"
+                          : ""
                       }`}
                     >
-                      {v}
+                      {option}
                     </button>
                   ))}
                 </div>
@@ -136,7 +198,10 @@ export default function TimeField({
                 type="button"
                 className="text-slate-600 hover:text-slate-900"
                 onClick={() => {
-                  if (!value) onChange("08:00");
+                  if (!value) {
+                    onChange("08:00");
+                  }
+
                   setOpen(false);
                 }}
               >

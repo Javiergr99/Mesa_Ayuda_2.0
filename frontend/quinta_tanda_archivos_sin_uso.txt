@@ -1,0 +1,187 @@
+﻿================================================================================
+ARCHIVO: src/components/ui/FileChips.tsx
+================================================================================
+
+import { Mail, Paperclip, X } from "lucide-react";
+
+type FileChipItem = {
+  id: string | number;
+  name: string;
+};
+
+type Props = {
+  items?: FileChipItem[];
+  onRemove?: (id: string | number) => void;
+  icon?: "paperclip" | "mail";
+  className?: string;
+  emptyText?: string;
+};
+
+export default function FileChips({
+  items = [],
+  onRemove = () => {},
+  icon = "paperclip",
+  className = "",
+  emptyText = "",
+}: Props) {
+  if (items.length === 0) {
+    return emptyText ? (
+      <div className={`mt-2 text-[12px] text-slate-500 ${className}`}>
+        {emptyText}
+      </div>
+    ) : null;
+  }
+
+  const Icon = icon === "mail" ? Mail : Paperclip;
+
+  return (
+    <div className={`mt-2 flex flex-wrap gap-2 ${className}`}>
+      {items.map((item) => (
+        <span
+          key={item.id}
+          className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-1 text-[12px] shadow-sm"
+        >
+          <Icon className="h-3.5 w-3.5 text-slate-500" />
+
+          <span className="max-w-[220px] truncate" title={item.name}>
+            {item.name}
+          </span>
+
+          <button
+            type="button"
+            onClick={() => onRemove(item.id)}
+            className="text-slate-400 hover:text-rose-500"
+            aria-label={`Eliminar ${item.name}`}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+
+================================================================================
+ARCHIVO: src/components/ui/RegistroBadge.tsx
+================================================================================
+
+
+
+================================================================================
+ARCHIVO: src/components/ui/StatusBadge.tsx
+================================================================================
+
+
+
+================================================================================
+ARCHIVO: src/modules/bitacoras/types/bitacoras.types.ts
+================================================================================
+
+export type EstatusBitacora = "Pendiente" | "Seguimiento" | "Finalizado";
+
+export type RegistroAbbr = "RMH" | "RMP" | "RDVF" | "RNOA";
+
+export type RegistroLabel =
+  | "Registro de Movilidad Humana"
+  | "Registro de Medidas de ProtecciÃ³n"
+  | "Registro de Derecho a Vivir en Familia"
+  | "Registro Nacional de Obligaciones Alimentarias";
+
+export type BitacoraRow = {
+  id: number;
+  folio: string;
+  fecha: string;
+  registro: RegistroAbbr;
+  estado: string;
+  tipo: string;
+  estatus: EstatusBitacora;
+  atendido_por: string;
+  nombre: string;
+};
+
+export type BitacoraDetail = {
+  id: number;
+  folio: string;
+  nombre: string;
+  primer_apellido: string | null;
+  segundo_apellido: string | null;
+  correo: string | null;
+  telefono: string | null;
+  estado: string;
+  instancia: string | null;
+  fecha: string;
+  hora: string;
+  tipo_caso: string;
+  atendido_por: string;
+  observaciones: string | null;
+  estatus: EstatusBitacora | string;
+  tipo_registro: string;
+  created_at: string;
+  updated_at: string | null;
+  usuario_id: number;
+};
+
+export type ArchivoBitacoraItem = {
+  id: number;
+  original_name: string;
+  stored_name: string;
+  content_type: string | null;
+  size_bytes: number;
+  created_at: string;
+};
+
+
+================================================================================
+ARCHIVO: src/services/solicitudes.service.ts
+================================================================================
+
+import http from "../api/http";
+
+export async function listSolicitudes() {
+  const { data } = await http.get("/solicitudes");
+  return data;
+}
+
+export async function getSolicitudById(id: number) {
+  const { data } = await http.get(`/solicitudes/${id}`);
+  return data;
+}
+
+export async function createSolicitud(payload: Record<string, unknown>) {
+  const { data } = await http.post("/solicitudes", payload);
+  return data;
+}
+
+export async function updateSolicitud(
+  id: number,
+  payload: Record<string, unknown>
+) {
+  const { data } = await http.patch(`/solicitudes/${id}`, payload);
+  return data;
+}
+
+export async function deleteSolicitud(id: number) {
+  const { data } = await http.delete(`/solicitudes/${id}`);
+  return data;
+}
+
+
+================================================================================
+ARCHIVO: src/utils/formatters.ts
+================================================================================
+
+
+
+================================================================================
+ARCHIVO: src/utils/navigation.ts
+================================================================================
+
+
+
+================================================================================
+ARCHIVO: src/utils/validators.ts
+================================================================================
+
+
+

@@ -28,48 +28,89 @@ type Props = {
   onSave: (updated: SolicitudRow) => void;
 };
 
-export default function SolicitudDrawer({ row, onClose, onSave }: Props) {
-  const [perfil, setPerfil] = useState("");
-  const [estatus, setEstatus] = useState<EstatusSolicitud>("Pendiente");
-  const [ambito, setAmbito] = useState("");
-  const [estado, setEstado] = useState("");
-  const [municipio, setMunicipio] = useState("");
-  const [tipoRegistro, setTipoRegistro] =
-    useState<TipoRegistroSolicitud>("RMH");
-  const [atendidoPor, setAtendidoPor] = useState("");
-  const [areaAdscripcion, setAreaAdscripcion] = useState("");
-  const [observaciones, setObservaciones] = useState("");
-  const [anexos, setAnexos] = useState<File[]>([]);
+type SolicitudDrawerForm = {
+  perfil: string;
+  estatus: EstatusSolicitud;
+  ambito: string;
+  estado: string;
+  municipio: string;
+  tipoRegistro: TipoRegistroSolicitud;
+  atendidoPor: string;
+  areaAdscripcion: string;
+  observaciones: string;
+  anexos: File[];
+};
+
+function createInitialForm(): SolicitudDrawerForm {
+  return {
+    perfil: "",
+    estatus: "Pendiente",
+    ambito: "",
+    estado: "",
+    municipio: "",
+    tipoRegistro: "RMH",
+    atendidoPor: "",
+    areaAdscripcion: "",
+    observaciones: "",
+    anexos: [],
+  };
+}
+
+function createFormFromRow(row: SolicitudRow): SolicitudDrawerForm {
+  return {
+    perfil: "",
+    estatus: row.estatus,
+    ambito: "",
+    estado: row.estado,
+    municipio: "",
+    tipoRegistro: row.registro,
+    atendidoPor: "",
+    areaAdscripcion: "",
+    observaciones: "",
+    anexos: [],
+  };
+}
+
+export default function SolicitudDrawer({
+  row,
+  onClose,
+  onSave,
+}: Props) {
+  const [form, setForm] = useState<SolicitudDrawerForm>(
+    createInitialForm,
+  );
 
   useEffect(() => {
-    if (!row) return;
-
-    setEstado(row.estado);
-    setEstatus(row.estatus);
-    setTipoRegistro(row.registro);
-    setObservaciones("");
-    setPerfil("");
-    setAmbito("");
-    setMunicipio("");
-    setAtendidoPor("");
-    setAreaAdscripcion("");
-    setAnexos([]);
+    if (row) {
+      setForm(createFormFromRow(row));
+    }
   }, [row]);
 
-  if (!row) return null;
+  if (!row) {
+    return null;
+  }
 
-  const currentRow: SolicitudRow = row;
-
+  const currentRow = row;
   const [nombre, ...resto] = currentRow.nombre.split(" ");
   const primerApellido = resto[0] || "";
   const segundoApellido = resto.slice(1).join(" ");
 
+  function updateField<K extends keyof SolicitudDrawerForm>(
+    key: K,
+    value: SolicitudDrawerForm[K],
+  ) {
+    setForm((currentForm) => ({
+      ...currentForm,
+      [key]: value,
+    }));
+  }
+
   function handleSave() {
     const updatedRow: SolicitudRow = {
       ...currentRow,
-      estado,
-      estatus,
-      registro: tipoRegistro,
+      estado: form.estado,
+      estatus: form.estatus,
+      registro: form.tipoRegistro,
     };
 
     onSave(updatedRow);
@@ -77,7 +118,12 @@ export default function SolicitudDrawer({ row, onClose, onSave }: Props) {
 
   return (
     <div className="fixed inset-0 z-40">
-      <div className="absolute inset-0 bg-slate-900/40" onClick={onClose} />
+      <button
+        type="button"
+        aria-label="Cerrar actualización de solicitud"
+        className="absolute inset-0 border-0 bg-slate-900/40 p-0"
+        onClick={onClose}
+      />
 
       <aside className="absolute right-0 top-0 flex h-full w-full max-w-[720px] animate-[fadeIn_100ms_ease-out] flex-col border-l border-slate-200 bg-white shadow-2xl">
         <div className="flex h-16 items-center justify-between border-b border-slate-200 px-6">
@@ -85,21 +131,26 @@ export default function SolicitudDrawer({ row, onClose, onSave }: Props) {
             <div className="text-[12px] text-slate-500">
               Solicitudes › Actualizar
             </div>
+
             <h2 className="text-lg font-semibold text-slate-900">
               Actualizar Solicitud
             </h2>
+
             <p className="text-[12px] text-slate-500">
-              Folio: <span className="font-medium">{currentRow.folio}</span>
+              Folio:{" "}
+              <span className="font-medium">
+                {currentRow.folio}
+              </span>
             </p>
           </div>
 
           <button
+            type="button"
             className="rounded-lg p-2 hover:bg-slate-50"
             onClick={onClose}
             aria-label="Cerrar"
-            type="button"
           >
-            <X className="h-5 w-5" />
+            <X aria-hidden="true" className="h-5 w-5" />
           </button>
         </div>
 
@@ -156,8 +207,10 @@ export default function SolicitudDrawer({ row, onClose, onSave }: Props) {
 
               <SelectField
                 label="Perfil"
-                value={perfil}
-                onChange={setPerfil}
+                value={form.perfil}
+                onChange={(value) =>
+                  updateField("perfil", value)
+                }
                 options={PERFIL_SOL}
                 className="col-span-12 md:col-span-4"
                 placeholder="Selecciona…"
@@ -169,8 +222,13 @@ export default function SolicitudDrawer({ row, onClose, onSave }: Props) {
             <div className="grid grid-cols-12 gap-4">
               <SelectField
                 label="Estatus"
-                value={estatus}
-                onChange={(v) => setEstatus(v as EstatusSolicitud)}
+                value={form.estatus}
+                onChange={(value) =>
+                  updateField(
+                    "estatus",
+                    value as EstatusSolicitud,
+                  )
+                }
                 options={ESTATUS_SOL}
                 className="col-span-12 md:col-span-4"
                 placeholder="Selecciona…"
@@ -178,8 +236,10 @@ export default function SolicitudDrawer({ row, onClose, onSave }: Props) {
 
               <SelectField
                 label="Ámbito"
-                value={ambito}
-                onChange={setAmbito}
+                value={form.ambito}
+                onChange={(value) =>
+                  updateField("ambito", value)
+                }
                 options={AMBITO_SOL}
                 className="col-span-12 md:col-span-4"
                 placeholder="Selecciona…"
@@ -187,8 +247,10 @@ export default function SolicitudDrawer({ row, onClose, onSave }: Props) {
 
               <SelectField
                 label="Estado"
-                value={estado}
-                onChange={setEstado}
+                value={form.estado}
+                onChange={(value) =>
+                  updateField("estado", value)
+                }
                 options={ESTADOS_MX}
                 className="col-span-12 md:col-span-4"
                 placeholder="Selecciona…"
@@ -196,8 +258,10 @@ export default function SolicitudDrawer({ row, onClose, onSave }: Props) {
 
               <SelectField
                 label="Municipio"
-                value={municipio}
-                onChange={setMunicipio}
+                value={form.municipio}
+                onChange={(value) =>
+                  updateField("municipio", value)
+                }
                 options={MUNICIPIOS_SOL}
                 className="col-span-12 md:col-span-4"
                 placeholder="Selecciona…"
@@ -205,16 +269,20 @@ export default function SolicitudDrawer({ row, onClose, onSave }: Props) {
 
               <TextField
                 label="Área adscripción"
-                value={areaAdscripcion}
-                onChange={setAreaAdscripcion}
+                value={form.areaAdscripcion}
+                onChange={(value) =>
+                  updateField("areaAdscripcion", value)
+                }
                 className="col-span-12 md:col-span-4"
                 placeholder="Nombre del área / adscripción"
               />
 
               <TextField
                 label="Atendido por"
-                value={atendidoPor}
-                onChange={setAtendidoPor}
+                value={form.atendidoPor}
+                onChange={(value) =>
+                  updateField("atendidoPor", value)
+                }
                 className="col-span-12 md:col-span-4"
                 placeholder="Nombre de la persona que atiende"
               />
@@ -233,8 +301,13 @@ export default function SolicitudDrawer({ row, onClose, onSave }: Props) {
 
               <SelectField
                 label="Tipo de registro"
-                value={tipoRegistro}
-                onChange={(v) => setTipoRegistro(v as TipoRegistroSolicitud)}
+                value={form.tipoRegistro}
+                onChange={(value) =>
+                  updateField(
+                    "tipoRegistro",
+                    value as TipoRegistroSolicitud,
+                  )
+                }
                 options={TIPOS_REGISTRO}
                 className="col-span-12 md:col-span-6"
                 placeholder="Selecciona…"
@@ -242,8 +315,10 @@ export default function SolicitudDrawer({ row, onClose, onSave }: Props) {
 
               <TextAreaField
                 label="Observaciones"
-                value={observaciones}
-                onChange={setObservaciones}
+                value={form.observaciones}
+                onChange={(value) =>
+                  updateField("observaciones", value)
+                }
                 className="col-span-12"
                 placeholder="Notas u observaciones relevantes sobre la solicitud…"
               />
@@ -253,8 +328,10 @@ export default function SolicitudDrawer({ row, onClose, onSave }: Props) {
           <CardSection title="Archivos">
             <FileUploadField
               label="Anexos (.pdf, .docx, .xlsx, .csv, .jpg, .png)"
-              files={anexos}
-              onChange={setAnexos}
+              files={form.anexos}
+              onChange={(files) =>
+                updateField("anexos", files)
+              }
               helperText=""
               buttonText="Elegir archivos"
             />
@@ -282,7 +359,12 @@ export default function SolicitudDrawer({ row, onClose, onSave }: Props) {
         </div>
       </aside>
 
-      <style>{`@keyframes fadeIn{from{opacity:0}to{opacity:1}}`}</style>
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+      `}</style>
     </div>
   );
 }

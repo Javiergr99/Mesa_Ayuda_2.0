@@ -1,4 +1,4 @@
-import React from "react";
+import { useId } from "react";
 
 type TextAreaFieldProps = {
   label: string;
@@ -25,31 +25,52 @@ export default function TextAreaField({
   error = false,
   helperText,
 }: TextAreaFieldProps) {
+  const fieldId = useId();
+  const helperId = `${fieldId}-helper`;
+  const countId = `${fieldId}-count`;
   const count = value?.length || 0;
+
+  const describedBy = [
+    helperText ? helperId : null,
+    maxLength ? countId : null,
+  ]
+    .filter(Boolean)
+    .join(" ") || undefined;
 
   return (
     <div className={className}>
-      <label className="block text-[13px] text-slate-600 mb-1">{label}</label>
+      <label
+        htmlFor={fieldId}
+        className="mb-1 block text-[13px] text-slate-600"
+      >
+        {label}
+      </label>
 
       <div className="relative">
         <textarea
+          id={fieldId}
           rows={rows}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
           disabled={disabled}
           maxLength={maxLength}
+          aria-invalid={error || undefined}
+          aria-describedby={describedBy}
           className={`w-full rounded-lg border bg-white px-3 py-2 text-[14px] placeholder:text-slate-400 focus:outline-none focus:ring-2 ${
             disabled
               ? "border-slate-200 bg-slate-50 text-slate-500"
               : error
-              ? "border-rose-400 focus:ring-rose-200"
-              : "border-slate-300 focus:ring-slate-300"
+                ? "border-rose-400 focus:ring-rose-200"
+                : "border-slate-300 focus:ring-slate-300"
           }`}
         />
 
         {maxLength ? (
-          <div className="absolute right-2 bottom-2 text-[11px] text-slate-400">
+          <div
+            id={countId}
+            className="absolute bottom-2 right-2 text-[11px] text-slate-400"
+          >
             {count}/{maxLength}
           </div>
         ) : null}
@@ -57,6 +78,7 @@ export default function TextAreaField({
 
       {helperText ? (
         <div
+          id={helperId}
           className={`mt-1 text-[12px] ${
             error ? "text-rose-600" : "text-slate-500"
           }`}

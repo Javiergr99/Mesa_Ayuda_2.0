@@ -1,5 +1,15 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { AlertCircle, CheckCircle2, Info, Mail } from "lucide-react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Info,
+  Mail,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import PageHeader from "../../../components/ui/PageHeader";
@@ -39,6 +49,11 @@ type SolicitudForm = {
   tipo_registro: string;
 };
 
+type ChangeField = <K extends keyof SolicitudForm>(
+  key: K,
+  value: SolicitudForm[K],
+) => void;
+
 const INITIAL_FORM: SolicitudForm = {
   nombre: "",
   primer_apellido: "",
@@ -59,7 +74,7 @@ const INITIAL_FORM: SolicitudForm = {
   tipo_registro: "",
 };
 
-const REQUIRED_FIELDS: Array<keyof SolicitudForm> = [
+const REQUIRED_FIELDS: readonly (keyof SolicitudForm)[] = [
   "nombre",
   "primer_apellido",
   "segundo_apellido",
@@ -74,7 +89,10 @@ const REQUIRED_FIELDS: Array<keyof SolicitudForm> = [
   "tipo_registro",
 ];
 
-const FIELD_LABELS: Record<keyof SolicitudForm, string> = {
+const FIELD_LABELS: Record<
+  keyof SolicitudForm,
+  string
+> = {
   nombre: "Nombre",
   primer_apellido: "Primer apellido",
   segundo_apellido: "Segundo apellido",
@@ -94,106 +112,437 @@ const FIELD_LABELS: Record<keyof SolicitudForm, string> = {
   tipo_registro: "Tipo de registro",
 };
 
+function FeedbackMessages({
+  successMessage,
+  errorMessage,
+}: {
+  successMessage: string;
+  errorMessage: string;
+}) {
+  return (
+    <>
+      {successMessage && (
+        <div
+          role="status"
+          className="mb-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-800"
+        >
+          <CheckCircle2
+            aria-hidden="true"
+            className="mt-0.5 h-5 w-5"
+          />
+          <div>{successMessage}</div>
+        </div>
+      )}
+
+      {errorMessage && (
+        <div
+          role="alert"
+          className="mb-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-rose-700"
+        >
+          <AlertCircle
+            aria-hidden="true"
+            className="mt-0.5 h-5 w-5"
+          />
+          <div>{errorMessage}</div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function PersonSection({
+  form,
+  triedSubmit,
+  onChange,
+}: {
+  form: SolicitudForm;
+  triedSubmit: boolean;
+  onChange: ChangeField;
+}) {
+  return (
+    <CardSection title="Datos de la persona">
+      <div className="grid grid-cols-12 gap-4">
+        <TextField
+          label="Nombre *"
+          value={form.nombre}
+          onChange={(value) => onChange("nombre", value)}
+          className="col-span-12 md:col-span-4"
+          placeholder="Nombre"
+          error={triedSubmit && !form.nombre}
+        />
+
+        <TextField
+          label="Primer apellido *"
+          value={form.primer_apellido}
+          onChange={(value) =>
+            onChange("primer_apellido", value)
+          }
+          className="col-span-12 md:col-span-4"
+          placeholder="Primer apellido"
+          error={
+            triedSubmit && !form.primer_apellido
+          }
+        />
+
+        <TextField
+          label="Segundo apellido *"
+          value={form.segundo_apellido}
+          onChange={(value) =>
+            onChange("segundo_apellido", value)
+          }
+          className="col-span-12 md:col-span-4"
+          placeholder="Segundo apellido"
+          error={
+            triedSubmit && !form.segundo_apellido
+          }
+        />
+
+        <TextField
+          label="Nombre de usuario *"
+          value={form.nombre_usuario}
+          onChange={(value) =>
+            onChange("nombre_usuario", value)
+          }
+          className="col-span-12 md:col-span-4"
+          placeholder="nombre.apellido"
+          error={
+            triedSubmit && !form.nombre_usuario
+          }
+        />
+
+        <TextField
+          label="Correo *"
+          type="email"
+          value={form.correo}
+          onChange={(value) => onChange("correo", value)}
+          className="col-span-12 md:col-span-4"
+          placeholder="correo@dominio"
+          error={triedSubmit && !form.correo}
+          icon={
+            <Mail
+              aria-hidden="true"
+              className="h-4 w-4 text-slate-400"
+            />
+          }
+        />
+
+        <TextField
+          label="Teléfono"
+          value={form.telefono}
+          onChange={(value) =>
+            onChange("telefono", value)
+          }
+          className="col-span-12 md:col-span-4"
+          placeholder="+52 ___ ___ ____"
+        />
+
+        <TextField
+          label="Extensión"
+          value={form.extension}
+          onChange={(value) =>
+            onChange("extension", value)
+          }
+          className="col-span-12 md:col-span-4"
+          placeholder="EXT"
+        />
+
+        <TextField
+          label="Celular"
+          value={form.celular}
+          onChange={(value) => onChange("celular", value)}
+          className="col-span-12 md:col-span-4"
+          placeholder="CELULAR"
+        />
+
+        <SelectField
+          label="Perfil *"
+          value={form.perfil}
+          onChange={(value) => onChange("perfil", value)}
+          options={PERFIL_SOL}
+          className="col-span-12 md:col-span-4"
+          placeholder="Selecciona…"
+          error={triedSubmit && !form.perfil}
+        />
+      </div>
+    </CardSection>
+  );
+}
+
+function LocationSection({
+  form,
+  triedSubmit,
+  onChange,
+}: {
+  form: SolicitudForm;
+  triedSubmit: boolean;
+  onChange: ChangeField;
+}) {
+  return (
+    <CardSection title="Ubicación / Institución">
+      <div className="grid grid-cols-12 gap-4">
+        <SelectField
+          label="Estatus *"
+          value={form.estatus}
+          onChange={(value) => onChange("estatus", value)}
+          options={ESTATUS_SOL}
+          className="col-span-12 md:col-span-4"
+          placeholder="Selecciona…"
+          error={triedSubmit && !form.estatus}
+        />
+
+        <SelectField
+          label="Ámbito *"
+          value={form.ambito}
+          onChange={(value) => onChange("ambito", value)}
+          options={AMBITO_SOL}
+          className="col-span-12 md:col-span-4"
+          placeholder="Selecciona…"
+          error={triedSubmit && !form.ambito}
+        />
+
+        <SelectField
+          label="Estado *"
+          value={form.estado}
+          onChange={(value) => onChange("estado", value)}
+          options={ESTADOS_MX}
+          className="col-span-12 md:col-span-4"
+          placeholder="Selecciona…"
+          error={triedSubmit && !form.estado}
+        />
+
+        <SelectField
+          label="Municipio"
+          value={form.municipio}
+          onChange={(value) =>
+            onChange("municipio", value)
+          }
+          options={MUNICIPIOS_SOL}
+          className="col-span-12 md:col-span-4"
+          placeholder="Selecciona…"
+        />
+
+        <TextField
+          label="Área adscripción *"
+          value={form.area_adscripcion}
+          onChange={(value) =>
+            onChange("area_adscripcion", value)
+          }
+          className="col-span-12 md:col-span-4"
+          placeholder="Nombre del área / adscripción"
+          error={
+            triedSubmit && !form.area_adscripcion
+          }
+        />
+
+        <TextField
+          label="Atendido por *"
+          value={form.atendido_por}
+          onChange={(value) =>
+            onChange("atendido_por", value)
+          }
+          className="col-span-12 md:col-span-4"
+          placeholder="Nombre de la persona que atiende"
+          error={triedSubmit && !form.atendido_por}
+        />
+      </div>
+    </CardSection>
+  );
+}
+
+function DetailsSection({
+  form,
+  triedSubmit,
+  onChange,
+}: {
+  form: SolicitudForm;
+  triedSubmit: boolean;
+  onChange: ChangeField;
+}) {
+  return (
+    <CardSection title="Detalles de la solicitud">
+      <div className="grid grid-cols-12 gap-4">
+        <TextAreaField
+          label="Observaciones"
+          value={form.observaciones}
+          onChange={(value) =>
+            onChange("observaciones", value)
+          }
+          className="col-span-12 md:col-span-8"
+          placeholder="Observaciones…"
+          maxLength={1500}
+        />
+
+        <SelectField
+          label="Tipo de registro *"
+          value={form.tipo_registro}
+          onChange={(value) =>
+            onChange("tipo_registro", value)
+          }
+          options={TIPOS_REGISTRO}
+          className="col-span-12 md:col-span-4"
+          placeholder="Selecciona…"
+          error={
+            triedSubmit && !form.tipo_registro
+          }
+        />
+      </div>
+    </CardSection>
+  );
+}
+
+function StickyActions({
+  saving,
+  showConfirm,
+  onCancel,
+  onSaveDraft,
+}: {
+  saving: boolean;
+  showConfirm: boolean;
+  onCancel: () => void;
+  onSaveDraft: () => void;
+}) {
+  return (
+    <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200/80 bg-white/90 shadow-[0_-4px_12px_rgba(2,6,23,0.06)] backdrop-blur supports-[backdrop-filter]:bg-white/75">
+      <div className="mx-auto flex max-w-[1200px] items-center justify-end gap-3 px-6 py-3">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={showConfirm}
+          className="rounded-xl px-3 py-2 text-[14px] text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Cancelar
+        </button>
+
+        <button
+          type="button"
+          onClick={onSaveDraft}
+          disabled={showConfirm}
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-[14px] shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Guardar borrador
+        </button>
+
+        <button
+          type="submit"
+          disabled={saving || showConfirm}
+          className="rounded-xl bg-slate-900 px-5 py-2.5 text-[14px] text-white shadow-md transition-colors hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:opacity-60"
+        >
+          {saving ? "Guardando…" : "Guardar"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function SolicitudRegistrarPage() {
   const navigate = useNavigate();
 
   const [saving, setSaving] = useState(false);
-  const [okMsg, setOkMsg] = useState("");
-  const [errMsg, setErrMsg] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
   const [triedSubmit, setTriedSubmit] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
-  const [form, setForm] = useState<SolicitudForm>(INITIAL_FORM);
+  const [form, setForm] = useState<SolicitudForm>(
+    INITIAL_FORM,
+  );
   const [showConfirm, setShowConfirm] = useState(false);
 
   const formIsDirty = useMemo(() => {
-    const anyValue = Object.values(form).some((value) => value.trim().length > 0);
-    return anyValue || files.length > 0;
+    const hasValue = Object.values(form).some(
+      (value) => value.trim().length > 0,
+    );
+
+    return hasValue || files.length > 0;
   }, [form, files]);
 
-  function safeNavigateHome() {
+  useEffect(() => {
+    if (!showConfirm) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showConfirm]);
+
+  function navigateHome() {
     navigate("/app", { replace: false });
   }
 
-  function onChange<K extends keyof SolicitudForm>(key: K, value: SolicitudForm[K]) {
-    setForm((prev) => ({ ...prev, [key]: value }));
+  function changeField<K extends keyof SolicitudForm>(
+    key: K,
+    value: SolicitudForm[K],
+  ) {
+    setForm((currentForm) => ({
+      ...currentForm,
+      [key]: value,
+    }));
   }
 
-  function validate() {
-    const missing = REQUIRED_FIELDS.filter((key) => !form[key].trim());
-
-    if (missing.length > 0) {
-      const missingLabels = missing.map((key) => FIELD_LABELS[key]);
-      setErrMsg(`Revisa campos requeridos: ${missingLabels.join(", ")}`);
-      setOkMsg("");
-      return false;
-    }
-
-    setErrMsg("");
-    return true;
-  }
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setShowConfirm(false);
-      }
-    }
-
-    document.addEventListener("keydown", onKey);
-
-    if (showConfirm) {
-      const previousOverflow = document.body.style.overflow;
-      document.body.style.overflow = "hidden";
-
-      return () => {
-        document.removeEventListener("keydown", onKey);
-        document.body.style.overflow = previousOverflow;
-      };
-    }
-
-    return () => document.removeEventListener("keydown", onKey);
-  }, [showConfirm]);
-
-  function onCancelClick() {
+  function handleCancel() {
     if (formIsDirty) {
       setShowConfirm(true);
       return;
     }
 
-    safeNavigateHome();
+    navigateHome();
   }
 
   function confirmLeave() {
     setShowConfirm(false);
-    safeNavigateHome();
+    navigateHome();
   }
 
-  function onSaveDraftClick() {
-    setOkMsg("Borrador guardado (preview).");
-    setErrMsg("");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  function saveDraft() {
+    setSuccessMessage("Borrador guardado (preview).");
+    setErrorMessage("");
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
   }
 
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
 
-    if (!validate()) {
+    const missingFields = REQUIRED_FIELDS.filter(
+      (key) => !form[key].trim(),
+    );
+
+    if (missingFields.length > 0) {
       setTriedSubmit(true);
+      setErrorMessage(
+        `Revisa campos requeridos: ${missingFields
+          .map((key) => FIELD_LABELS[key])
+          .join(", ")}`,
+      );
+      setSuccessMessage("");
       return;
     }
 
     setTriedSubmit(false);
     setSaving(true);
-    setOkMsg("");
-    setErrMsg("");
+    setSuccessMessage("");
+    setErrorMessage("");
 
-    setTimeout(() => {
+    window.setTimeout(() => {
       setSaving(false);
-      setOkMsg("Solicitud (preview) validada. Lista para conectar a API.");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-
+      setSuccessMessage(
+        "Solicitud (preview) validada. Lista para conectar a API.",
+      );
       setForm(INITIAL_FORM);
       setFiles([]);
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
     }, 700);
   }
 
@@ -204,182 +553,32 @@ export default function SolicitudRegistrarPage() {
         title="Registrar solicitud"
       />
 
-      <form onSubmit={onSubmit} className="mx-auto max-w-[1200px] px-6 pb-28">
-        {okMsg && (
-          <div className="mb-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-800">
-            <CheckCircle2 className="mt-0.5 h-5 w-5" />
-            <div>{okMsg}</div>
-          </div>
-        )}
+      <form
+        onSubmit={handleSubmit}
+        className="mx-auto max-w-[1200px] px-6 pb-28"
+      >
+        <FeedbackMessages
+          successMessage={successMessage}
+          errorMessage={errorMessage}
+        />
 
-        {errMsg && (
-          <div className="mb-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-rose-700">
-            <AlertCircle className="mt-0.5 h-5 w-5" />
-            <div>{errMsg}</div>
-          </div>
-        )}
+        <PersonSection
+          form={form}
+          triedSubmit={triedSubmit}
+          onChange={changeField}
+        />
 
-        <CardSection title="Datos de la persona">
-          <div className="grid grid-cols-12 gap-4">
-            <TextField
-              label="Nombre *"
-              value={form.nombre}
-              onChange={(v) => onChange("nombre", v)}
-              className="col-span-12 md:col-span-4"
-              placeholder="Nombre"
-            />
+        <LocationSection
+          form={form}
+          triedSubmit={triedSubmit}
+          onChange={changeField}
+        />
 
-            <TextField
-              label="Primer apellido *"
-              value={form.primer_apellido}
-              onChange={(v) => onChange("primer_apellido", v)}
-              className="col-span-12 md:col-span-4"
-              placeholder="Primer apellido"
-            />
-
-            <TextField
-              label="Segundo apellido *"
-              value={form.segundo_apellido}
-              onChange={(v) => onChange("segundo_apellido", v)}
-              className="col-span-12 md:col-span-4"
-              placeholder="Segundo apellido"
-            />
-
-            <TextField
-              label="Nombre de usuario *"
-              value={form.nombre_usuario}
-              onChange={(v) => onChange("nombre_usuario", v)}
-              className="col-span-12 md:col-span-4"
-              placeholder="nombre.apellido"
-            />
-
-            <TextField
-              label="Correo *"
-              type="email"
-              value={form.correo}
-              onChange={(v) => onChange("correo", v)}
-              className="col-span-12 md:col-span-4"
-              placeholder="correo@dominio"
-              icon={<Mail className="h-4 w-4 text-slate-400" />}
-            />
-
-            <TextField
-              label="Teléfono"
-              value={form.telefono}
-              onChange={(v) => onChange("telefono", v)}
-              className="col-span-12 md:col-span-4"
-              placeholder="+52 ___ ___ ____"
-            />
-
-            <TextField
-              label="Extensión"
-              value={form.extension}
-              onChange={(v) => onChange("extension", v)}
-              className="col-span-12 md:col-span-4"
-              placeholder="EXT"
-            />
-
-            <TextField
-              label="Celular"
-              value={form.celular}
-              onChange={(v) => onChange("celular", v)}
-              className="col-span-12 md:col-span-4"
-              placeholder="CELULAR"
-            />
-
-            <SelectField
-              label="Perfil *"
-              value={form.perfil}
-              onChange={(v) => onChange("perfil", v)}
-              options={PERFIL_SOL}
-              className="col-span-12 md:col-span-4"
-              placeholder="Selecciona…"
-              error={triedSubmit && !form.perfil}
-            />
-          </div>
-        </CardSection>
-
-        <CardSection title="Ubicación / Institución">
-          <div className="grid grid-cols-12 gap-4">
-            <SelectField
-              label="Estatus *"
-              value={form.estatus}
-              onChange={(v) => onChange("estatus", v)}
-              options={ESTATUS_SOL}
-              className="col-span-12 md:col-span-4"
-              placeholder="Selecciona…"
-              error={triedSubmit && !form.estatus}
-            />
-
-            <SelectField
-              label="Ámbito *"
-              value={form.ambito}
-              onChange={(v) => onChange("ambito", v)}
-              options={AMBITO_SOL}
-              className="col-span-12 md:col-span-4"
-              placeholder="Selecciona…"
-              error={triedSubmit && !form.ambito}
-            />
-
-            <SelectField
-              label="Estado *"
-              value={form.estado}
-              onChange={(v) => onChange("estado", v)}
-              options={ESTADOS_MX}
-              className="col-span-12 md:col-span-4"
-              placeholder="Selecciona…"
-              error={triedSubmit && !form.estado}
-            />
-
-            <SelectField
-              label="Municipio"
-              value={form.municipio}
-              onChange={(v) => onChange("municipio", v)}
-              options={MUNICIPIOS_SOL}
-              className="col-span-12 md:col-span-4"
-              placeholder="Selecciona…"
-            />
-
-            <TextField
-              label="Área adscripción *"
-              value={form.area_adscripcion}
-              onChange={(v) => onChange("area_adscripcion", v)}
-              className="col-span-12 md:col-span-4"
-              placeholder="Nombre del área / adscripción"
-            />
-
-            <TextField
-              label="Atendido por *"
-              value={form.atendido_por}
-              onChange={(v) => onChange("atendido_por", v)}
-              className="col-span-12 md:col-span-4"
-              placeholder="Nombre de la persona que atiende"
-            />
-          </div>
-        </CardSection>
-
-        <CardSection title="Detalles de la solicitud">
-          <div className="grid grid-cols-12 gap-4">
-            <TextAreaField
-              label="Observaciones"
-              value={form.observaciones}
-              onChange={(v) => onChange("observaciones", v)}
-              className="col-span-12 md:col-span-8"
-              placeholder="Observaciones…"
-              maxLength={1500}
-            />
-
-            <SelectField
-              label="Tipo de registro *"
-              value={form.tipo_registro}
-              onChange={(v) => onChange("tipo_registro", v)}
-              options={TIPOS_REGISTRO}
-              className="col-span-12 md:col-span-4"
-              placeholder="Selecciona…"
-              error={triedSubmit && !form.tipo_registro}
-            />
-          </div>
-        </CardSection>
+        <DetailsSection
+          form={form}
+          triedSubmit={triedSubmit}
+          onChange={changeField}
+        />
 
         <CardSection title="Archivos">
           <FileUploadField
@@ -391,35 +590,12 @@ export default function SolicitudRegistrarPage() {
           />
         </CardSection>
 
-        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200/80 bg-white/90 shadow-[0_-4px_12px_rgba(2,6,23,0.06)] backdrop-blur supports-[backdrop-filter]:bg-white/75">
-          <div className="mx-auto flex max-w-[1200px] items-center justify-end gap-3 px-6 py-3">
-            <button
-              type="button"
-              onClick={onCancelClick}
-              disabled={showConfirm}
-              className="rounded-xl px-3 py-2 text-[14px] text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Cancelar
-            </button>
-
-            <button
-              type="button"
-              onClick={onSaveDraftClick}
-              disabled={showConfirm}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-[14px] shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Guardar borrador
-            </button>
-
-            <button
-              type="submit"
-              disabled={saving || showConfirm}
-              className="rounded-xl bg-slate-900 px-5 py-2.5 text-[14px] text-white shadow-md transition-colors hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:opacity-60"
-            >
-              {saving ? "Guardando…" : "Guardar"}
-            </button>
-          </div>
-        </div>
+        <StickyActions
+          saving={saving}
+          showConfirm={showConfirm}
+          onCancel={handleCancel}
+          onSaveDraft={saveDraft}
+        />
       </form>
 
       <ConfirmDialog
@@ -434,10 +610,14 @@ export default function SolicitudRegistrarPage() {
       />
 
       <div className="mx-auto flex max-w-[1200px] items-start gap-2 px-6 py-8 text-sm text-slate-500">
-        <Info className="mt-1 h-4 w-4" />
+        <Info
+          aria-hidden="true"
+          className="mt-1 h-4 w-4"
+        />
         <p>
-          Vista previa del formulario. Al conectar API, este submit enviará JSON
-          + archivos por multipart/form-data.
+          Vista previa del formulario. Al conectar la API,
+          este envío utilizará JSON y archivos mediante
+          multipart/form-data.
         </p>
       </div>
     </div>
