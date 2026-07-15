@@ -57,3 +57,8 @@ media/
 # Archivos locales y respaldos manuales
 MySQL Local.session.sql
 backend/app/main_backup.py
+
+backend/.env
+backend/.venv/
+backend/__pycache__/
+backend/**/*.pyc

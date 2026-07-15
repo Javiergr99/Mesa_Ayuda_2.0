@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 import base64
 import hashlib
 import hmac
 import json
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Request, Response
 from passlib.context import CryptContext
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -21,69 +22,178 @@ class JWTError(Exception):
     pass
 
 
-def _b64e(b: bytes) -> str:
-    return base64.urlsafe_b64encode(b).rstrip(b"=").decode("ascii")
+def _b64e(value: bytes) -> str:
+    return (
+        base64.urlsafe_b64encode(value)
+        .rstrip(b"=")
+        .decode("ascii")
+    )
 
 
-def _b64d(s: str) -> bytes:
-    return base64.urlsafe_b64decode((s + "=" * (-len(s) % 4)).encode("ascii"))
+def _b64d(value: str) -> bytes:
+    padding = "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode(
+        (value + padding).encode("ascii")
+    )
 
 
 def jwt_encode(payload: dict, secret: str) -> str:
-    header = _b64e(json.dumps({"alg": "HS256", "typ": "JWT"}).encode())
-    body = _b64e(json.dumps(payload).encode())
-    sig = _b64e(
-        hmac.new(secret.encode(), f"{header}.{body}".encode(), hashlib.sha256).digest()
+    header = _b64e(
+        json.dumps(
+            {"alg": "HS256", "typ": "JWT"},
+            separators=(",", ":"),
+        ).encode("utf-8")
     )
-    return f"{header}.{body}.{sig}"
+    body = _b64e(
+        json.dumps(
+            payload,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
+    signature = _b64e(
+        hmac.new(
+            secret.encode("utf-8"),
+            f"{header}.{body}".encode("ascii"),
+            hashlib.sha256,
+        ).digest()
+    )
+
+    return f"{header}.{body}.{signature}"
 
 
 def jwt_decode(token: str, secret: str) -> dict:
     try:
-        h, p, s = token.split(".")
-    except ValueError as e:
-        raise JWTError("Token malformado") from e
+        encoded_header, encoded_payload, encoded_signature = (
+            token.split(".")
+        )
+    except ValueError as error:
+        raise JWTError("Token malformado") from error
 
-    expected = hmac.new(secret.encode(), f"{h}.{p}".encode(), hashlib.sha256).digest()
-    if not hmac.compare_digest(expected, _b64d(s)):
+    try:
+        header = json.loads(
+            _b64d(encoded_header).decode("utf-8")
+        )
+        payload = json.loads(
+            _b64d(encoded_payload).decode("utf-8")
+        )
+        supplied_signature = _b64d(encoded_signature)
+    except Exception as error:
+        raise JWTError("Token inválido") from error
+
+    if not isinstance(header, dict) or not isinstance(payload, dict):
+        raise JWTError("Token inválido")
+
+    if header.get("alg") != "HS256" or header.get("typ") != "JWT":
+        raise JWTError("Algoritmo de token no permitido")
+
+    expected_signature = hmac.new(
+        secret.encode("utf-8"),
+        f"{encoded_header}.{encoded_payload}".encode("ascii"),
+        hashlib.sha256,
+    ).digest()
+
+    if not hmac.compare_digest(
+        expected_signature,
+        supplied_signature,
+    ):
         raise JWTError("Firma inválida")
 
-    data = json.loads(_b64d(p))
+    expiration = payload.get("exp")
+    if expiration is None:
+        raise JWTError("Token sin expiración")
 
-    if "exp" in data:
-        now_ts = int(datetime.now(timezone.utc).timestamp())
-        if now_ts >= int(data["exp"]):
-            raise JWTError("Expirado")
+    try:
+        expiration_timestamp = int(expiration)
+    except (TypeError, ValueError) as error:
+        raise JWTError("Expiración inválida") from error
 
-    return data
+    current_timestamp = int(
+        datetime.now(timezone.utc).timestamp()
+    )
+
+    if current_timestamp >= expiration_timestamp:
+        raise JWTError("Token expirado")
+
+    return payload
 
 
-pwd_ctx = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
+pwd_ctx = CryptContext(
+    schemes=["bcrypt_sha256"],
+    deprecated="auto",
+)
 
 
 def hash_password(password: str) -> str:
     return pwd_ctx.hash(password)
 
 
-def verify_password(password: str, password_hash: str) -> bool:
+def verify_password(
+    password: str,
+    password_hash: str,
+) -> bool:
     return pwd_ctx.verify(password, password_hash)
 
 
 def create_access_token(sub: str) -> str:
-    exp = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TTL_MIN)
-    return jwt_encode({"sub": sub, "exp": int(exp.timestamp())}, settings.JWT_SECRET)
+    now = datetime.now(timezone.utc)
+    expiration = now + timedelta(
+        minutes=settings.ACCESS_TTL_MIN
+    )
+
+    return jwt_encode(
+        {
+            "sub": sub,
+            "iat": int(now.timestamp()),
+            "exp": int(expiration.timestamp()),
+        },
+        settings.JWT_SECRET,
+    )
 
 
-def token_from(request: Request) -> str:
-    cookie_token = request.cookies.get(settings.COOKIE_NAME)
-    if cookie_token:
-        return cookie_token
+def set_auth_cookie(
+    response: Response,
+    token: str,
+) -> None:
+    response.set_cookie(
+        key=settings.COOKIE_NAME,
+        value=token,
+        max_age=settings.ACCESS_TTL_MIN * 60,
+        path=settings.COOKIE_PATH,
+        domain=settings.cookie_domain,
+        secure=settings.COOKIE_SECURE,
+        httponly=True,
+        samesite=settings.COOKIE_SAMESITE,
+    )
 
-    auth = request.headers.get("Authorization")
-    if auth and auth.lower().startswith("bearer "):
-        return auth.split(" ", 1)[1]
 
-    raise HTTPException(status_code=401, detail="No autenticado")
+def clear_auth_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=settings.COOKIE_NAME,
+        path=settings.COOKIE_PATH,
+        domain=settings.cookie_domain,
+        secure=settings.COOKIE_SECURE,
+        httponly=True,
+        samesite=settings.COOKIE_SAMESITE,
+    )
+
+
+def set_no_store_headers(response: Response) -> None:
+    response.headers["Cache-Control"] = (
+        "no-store, no-cache, must-revalidate, max-age=0"
+    )
+    response.headers["Pragma"] = "no-cache"
+
+
+def token_from_cookie(request: Request) -> str:
+    token = request.cookies.get(settings.COOKIE_NAME)
+
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="No autenticado",
+        )
+
+    return token
 
 
 def get_current_user(
@@ -91,12 +201,29 @@ def get_current_user(
     db: Annotated[Session, Depends(get_db)],
 ) -> User:
     try:
-        data = TokenPayload(**jwt_decode(token_from(request), settings.JWT_SECRET))
-    except Exception:
-        raise HTTPException(status_code=401, detail="No autenticado")
+        decoded = jwt_decode(
+            token_from_cookie(request),
+            settings.JWT_SECRET,
+        )
+        token_payload = TokenPayload(**decoded)
+        user_id = int(token_payload.sub)
+    except (
+        JWTError,
+        ValidationError,
+        TypeError,
+        ValueError,
+    ) as error:
+        raise HTTPException(
+            status_code=401,
+            detail="No autenticado",
+        ) from error
 
-    user = db.get(User, int(data.sub))
+    user = db.get(User, user_id)
+
     if not user or not user.is_active:
-        raise HTTPException(status_code=401, detail="No autenticado")
+        raise HTTPException(
+            status_code=401,
+            detail="No autenticado",
+        )
 
     return user

@@ -12,21 +12,27 @@ export type MeResponse = {
   username: string;
 };
 
-export async function login(payload: LoginPayload) {
-  const { data } = await http.post("/auth/login", payload);
+export type LoginResponse = {
+  ok: boolean;
+  user: MeResponse;
+};
 
-  const token =
-    data?.access_token || data?.token || data?.accessToken || null;
-
-  if (token) {
-    localStorage.setItem("token", token);
-  }
+export async function login(
+  payload: LoginPayload,
+) {
+  const { data } = await http.post<LoginResponse>(
+    "/auth/login",
+    payload,
+  );
 
   return data;
 }
 
 export async function me() {
-  const { data } = await http.get<MeResponse>("/auth/me");
+  const { data } = await http.get<MeResponse>(
+    "/auth/me",
+  );
+
   return data;
 }
 
@@ -40,13 +46,6 @@ export async function checkSession() {
 }
 
 export async function logout() {
-  try {
-    await http.post(LOGOUT_PATH);
-  } catch {
-    // no-op
-  } finally {
-    localStorage.removeItem("token");
-  }
-
+  await http.post(LOGOUT_PATH);
   return true;
 }
