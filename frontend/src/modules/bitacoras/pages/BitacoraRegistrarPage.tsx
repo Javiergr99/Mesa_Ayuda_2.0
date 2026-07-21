@@ -864,7 +864,7 @@ export default function BitacoraRegistrarPage() {
   } = useBitacoraRegistration();
 
   return (
-    <div className="min-h-screen bg-[#F6F7F9] text-slate-800">
+    <div className="min-h-dvh bg-[#F6F7F9] text-slate-800">
       <PageHeader
         breadcrumb="Bitácora › Registrar"
         title="Registrar atención"

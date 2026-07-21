@@ -50,7 +50,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden">
+    <div className="relative min-h-dvh w-full overflow-hidden">
       <div
         className="absolute inset-0 bg-center bg-no-repeat"
         style={{ backgroundImage: `url(${BG_URL})`, backgroundSize: "cover" }}
@@ -58,7 +58,7 @@ export default function LoginPage() {
       <div className="absolute inset-0 bg-black/30 backdrop-blur-[6px]" />
       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/25 to-black/50" />
 
-      <main className="relative z-10 mx-auto flex min-h-screen max-w-7xl items-center justify-center px-4 py-16">
+      <main className="relative z-10 mx-auto flex min-h-dvh max-w-7xl items-center justify-center px-4 py-16">
         <section
           id="login-section"
           className="w-full max-w-md scale-95 rounded-3xl border border-white/40 bg-white/25 p-8 opacity-0 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-2xl"

@@ -4,7 +4,7 @@ import AppSidebar from "./AppSidebar";
 
 export default function AppShell() {
   return (
-    <div className="h-screen bg-slate-50">
+    <div className="h-dvh bg-slate-50">
       <AppHeader />
       <div className="flex h-full pt-16">
         <AppSidebar />

@@ -1,9 +1,0 @@
-﻿src\components\ui\FileChips.tsx:16:export default function FileChips({
-src\modules\bitacoras\components\BitacoraTable.tsx:52:function EstatusBadge({ value }: { value: Estatus }) {
-src\modules\bitacoras\components\BitacoraTable.tsx:62:function RegistroBadge({ code }: { code: RegistroAbbr }) {
-src\modules\bitacoras\components\BitacoraTable.tsx:131:<RegistroBadge code={row.registro} />
-src\modules\bitacoras\components\BitacoraTable.tsx:136:<EstatusBadge value={row.estatus} />
-src\modules\solicitudes\components\SolicitudTable.tsx:38:function EstatusBadge({ value }: { value: EstatusSolicitud }) {
-src\modules\solicitudes\components\SolicitudTable.tsx:48:function RegistroBadge({ code }: { code: TipoRegistroSolicitud }) {
-src\modules\solicitudes\components\SolicitudTable.tsx:109:<RegistroBadge code={row.registro} />
-src\modules\solicitudes\components\SolicitudTable.tsx:113:<EstatusBadge value={row.estatus} />

@@ -1,6 +1,11 @@
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import {
+  createBrowserRouter,
+  Navigate,
+  Outlet,
+} from "react-router-dom";
 
 import ProtectedRoute from "../routes/ProtectedRoute";
+import RouteErrorPage from "../routes/RouteErrorPage";
 import AppShell from "../layouts/AppShell";
 
 import LoginPage from "../modules/auth/pages/LoginPage";
@@ -13,34 +18,56 @@ import SolicitudRegistrarPage from "../modules/solicitudes/pages/SolicitudRegist
 import SolicitudSeguimientoPage from "../modules/solicitudes/pages/SolicitudSeguimientoPage";
 
 const router = createBrowserRouter([
-  { path: "/", element: <Navigate to="/login" replace /> },
-
-  { path: "/login", element: <LoginPage /> },
-
   {
-    element: <ProtectedRoute />,
+    path: "/",
+    element: <Outlet />,
+    errorElement: <RouteErrorPage />,
     children: [
       {
-        path: "/app",
-        element: <AppShell />,
+        index: true,
+        element: <Navigate to="/login" replace />,
+      },
+      {
+        path: "login",
+        element: <LoginPage />,
+      },
+      {
+        element: <ProtectedRoute />,
         children: [
-          { index: true, element: <HomePage /> },
-          { path: "bitacoras/nueva", element: <BitacoraRegistrarPage /> },
           {
-            path: "bitacoras/seguimiento",
-            element: <BitacoraSeguimientoPage />,
-          },
-          { path: "solicitudes/nueva", element: <SolicitudRegistrarPage /> },
-          {
-            path: "solicitudes/seguimiento",
-            element: <SolicitudSeguimientoPage />,
+            path: "app",
+            element: <AppShell />,
+            children: [
+              {
+                index: true,
+                element: <HomePage />,
+              },
+              {
+                path: "bitacoras/nueva",
+                element: <BitacoraRegistrarPage />,
+              },
+              {
+                path: "bitacoras/seguimiento",
+                element: <BitacoraSeguimientoPage />,
+              },
+              {
+                path: "solicitudes/nueva",
+                element: <SolicitudRegistrarPage />,
+              },
+              {
+                path: "solicitudes/seguimiento",
+                element: <SolicitudSeguimientoPage />,
+              },
+            ],
           },
         ],
       },
+      {
+        path: "*",
+        element: <Navigate to="/login" replace />,
+      },
     ],
   },
-
-  { path: "*", element: <Navigate to="/login" replace /> },
 ]);
 
 export default router;
